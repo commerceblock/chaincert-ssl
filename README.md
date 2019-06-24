@@ -9,14 +9,6 @@ A fork of rust-ssl.
 
 [Documentation](https://docs.rs/openssl).
 
-## Release Support
-
-The current supported release is 0.10.
-
-New major versions will be published at most once per year. After a new
-release, the previous major version will be partially supported with bug
-fixes for 3 months, after which support will be dropped entirely.
-
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally
