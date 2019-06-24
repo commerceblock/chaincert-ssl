@@ -1,10 +1,11 @@
-# rust-openssl
+# chaincert-ssl
 
 [![CircleCI](https://circleci.com/gh/sfackler/rust-openssl.svg?style=shield)](https://circleci.com/gh/sfackler/rust-openssl)
 [![Build status](https://ci.appveyor.com/api/projects/status/d1knobws948pyynk/branch/master?svg=true)](https://ci.appveyor.com/project/sfackler/rust-openssl/branch/master)
 [![crates.io](https://img.shields.io/crates/v/openssl.svg)](https://crates.io/crates/openssl)
 
-OpenSSL bindings for the Rust programming language.
+Chaincert extentions for X509 certificates.
+A fork of rust-ssl.
 
 [Documentation](https://docs.rs/openssl).
 
