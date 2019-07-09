@@ -1,4 +1,4 @@
-//! Add extensions to an `X509` certificate or certificate request.
+//! AddString extensions to an `X509` certificate or certificate request.
 //!
 //! The extensions defined for X.509 v3 certificates provide methods for
 //! associating additional attributes with users or public keys and for
@@ -507,6 +507,193 @@ impl SubjectAlternativeName {
     }
 }
 
+/// An extension that allows a cryptoasset identity to be bound to the
+/// the certificate.
+pub struct ChainCert {
+    critical: bool,
+    protocol_version: Option<u32>,
+    policy_version: Option<u32>,
+    min_ca: Option<u32>,
+    cop_cmc: Option<u32>,
+    cop_change: Option<u32>,
+    token_full_name: Option<String>,
+    token_short_name: Option<String>,
+    genesis_block_hash: Option<String>,
+    contract_hash: Option<String>,
+    slot_id: Option<String>,
+    blocksign_script_sig: Option<String>,
+    wallet_hash: Vec<String>,
+    wallet_server: Vec<String>,
+}
+
+impl ChainCert {
+    pub const OID: &'static str = "1.34.90.2.39.21.1.4.5.44.23.2";
+    pub const SN: &'static str = "ChainCert";
+    pub const LN: &'static str = "ChainCert blockchain certificate extension by www.commerceblock.com";
+
+
+    //Get the CHAINCERT Nid, creating a new one if necessary
+    pub fn get_nid() -> Nid {
+        //Try to get the nid from the long name
+        let val = Nid::from_long_name(ChainCert::LN);
+        if val != Nid::from_raw(0) {
+            return val;
+        }
+        if val != Nid::UNDEF {
+            return val;
+        }
+        let cc_nid = Nid::create(ChainCert::OID, ChainCert::SN, ChainCert::LN);
+        cc_nid
+    }
+
+    /// Construct a new `ChainCert` extension.
+    pub fn new() -> ChainCert {
+        ChainCert {
+            critical: false,
+            protocol_version: None,
+            policy_version: None,
+            min_ca: None,
+            cop_cmc: None,
+            cop_change: None,
+            token_full_name: None,
+            token_short_name: None,
+            genesis_block_hash: None,
+            contract_hash: None,
+            slot_id: None,
+            blocksign_script_sig: None,
+            wallet_hash: vec![],
+            wallet_server: vec![],
+        }
+    }
+
+    /// Sets the `critical` flag to `true`. The extension will be critical.
+    pub fn critical(&mut self) -> &mut ChainCert {
+        self.critical = true;
+        self
+    }
+
+    /// Sets the protocol version number.
+    pub fn protocol_version(&mut self, protocol_version: u32) -> &mut ChainCert {
+        self.protocol_version = Some(protocol_version);
+        self
+    }
+
+    /// Sets the policy version number.
+    pub fn policy_version (&mut self, policy_version: u32) -> &mut ChainCert {
+        self.policy_version = Some(policy_version);
+        self
+    }
+
+    /// Sets the minimum number of distinct root CAs
+    pub fn min_ca (&mut self, min_ca: u32) -> &mut ChainCert {
+        self.min_ca = Some(min_ca);
+        self
+    }
+
+    /// Sets the cooling off period for registering a new chaincert multisignature certificate
+    pub fn cop_cmc (&mut self, cop_cmc: u32) -> &mut ChainCert {
+        self.cop_cmc = Some(cop_cmc);
+        self
+    }
+
+    /// Sets the cooling off period for any changes
+    pub fn cop_change (&mut self, cop_change: u32) -> &mut ChainCert {
+        self.cop_change = Some(cop_change);
+        self
+    }
+
+    pub fn token_full_name(&mut self, token_full_name: &str) -> &mut ChainCert {
+        self.token_full_name=Some(token_full_name.to_string());
+        self
+    }
+
+    pub fn token_short_name(&mut self, token_short_name: &str) -> &mut ChainCert {
+        self.token_short_name=Some(token_short_name.to_string());
+        self
+    }
+
+    pub fn genesis_block_hash(&mut self, genesis_block_hash: &str) -> &mut ChainCert {
+        self.genesis_block_hash=Some(genesis_block_hash.to_string());
+        self
+    }
+
+    pub fn contract_hash(&mut self, contract_hash: &str) -> &mut ChainCert {
+        self.contract_hash=Some(contract_hash.to_string());
+        self
+    }
+
+    pub fn slot_id(&mut self, slot_id: &str) -> &mut ChainCert {
+        self.slot_id=Some(slot_id.to_string());
+        self
+    }
+
+    pub fn blocksign_script_sig(&mut self, blocksign_script_sig: &str) -> &mut ChainCert {
+        self.blocksign_script_sig=Some(blocksign_script_sig.to_string());
+        self
+    }
+
+    pub fn wallet_hash(&mut self, wallet_hash: &str) -> &mut ChainCert {
+        self.wallet_hash.push(wallet_hash.to_string());
+        self
+    }
+
+    pub fn wallet_server(&mut self, wallet_server: &str) -> &mut ChainCert {
+        self.wallet_hash.push(wallet_server.to_string());
+        self
+    }
+    
+    /// Return the `ChainCert` extension as an `X509Extension`.
+    pub fn build(&self, ctx: &X509v3Context) -> Result<X509Extension, ErrorStack> {
+        let mut value = String::new();
+        let mut first = true;
+        append(&mut value, &mut first, self.critical, "critical");
+        if let Some(protocol_version) = self.protocol_version{
+            append_u32(&mut value, &mut first, protocol_version, "protocolVersion");
+        }
+        if let Some(policy_version) = self.policy_version{
+            append_u32(&mut value, &mut first, policy_version, "policyVersion");
+        }
+        if let Some(min_ca) = self.min_ca{
+            append_u32(&mut value, &mut first, min_ca, "minCa");
+        }
+        if let Some(cop_cmc) = self.cop_cmc{
+            append_u32(&mut value, &mut first, cop_cmc, "copCmc");
+        }
+        if let Some(cop_change) = self.cop_change{
+            append_u32(&mut value, &mut first, cop_change, "copChange");
+        }
+        if let Some(ref token_full_name) = self.token_full_name{
+            append_str(&mut value, &mut first, &token_full_name, "tokenFullName");
+        }
+        if let Some(ref token_short_name) = self.token_short_name{
+            append_str(&mut value, &mut first, &token_short_name, "tokenShortName");
+        }
+        if let Some(ref genesis_block_hash) = self.genesis_block_hash{
+            append_str(&mut value, &mut first, &genesis_block_hash, "genesisBlockHash");
+        }
+        if let Some(ref contract_hash) = self.contract_hash{
+            append_str(&mut value, &mut first,&contract_hash , "contractHash");
+        }
+        if let Some(ref slot_id) = self.slot_id{
+            append_str(&mut value, &mut first, &slot_id, "slotID");
+        }
+        if let Some(ref blocksign_script_sig) = self.blocksign_script_sig{
+            append_str(&mut value, &mut first, &blocksign_script_sig, "blocksignScriptSig");
+        }
+
+        for wallet_hash in &self.wallet_hash {
+            append_str(&mut value, &mut first, wallet_hash, "walletHash");
+        }
+        for wallet_server in &self.wallet_server {
+            append_str(&mut value, &mut first, wallet_server, "walletServer");
+        }
+
+        X509Extension::new_nid(None, Some(ctx), ChainCert::get_nid(), &value)
+    }
+}
+
+
+
 fn append(value: &mut String, first: &mut bool, should: bool, element: &str) {
     if !should {
         return;
@@ -518,3 +705,27 @@ fn append(value: &mut String, first: &mut bool, should: bool, element: &str) {
     *first = false;
     value.push_str(element);
 }
+
+//For building extensions unknown to X509v3 (arbitrary extensions)
+fn append_str(value: &mut String, first: &mut bool, val: &str, element: &str) {
+    if !*first {
+        value.push(',');
+    }
+    *first = false;
+    //Required for unknown extensions
+    value.push_str("ASN1:UTF8String:");
+    value.push_str(element);
+    value.push(':');
+    value.push_str(&val.to_string());
+}
+
+fn append_u32(value: &mut String, first: &mut bool, val: u32, element: &str) {
+    append_str(value, first, &val.to_string(), element);
+}
+
+
+
+
+
+
+

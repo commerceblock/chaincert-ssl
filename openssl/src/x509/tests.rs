@@ -9,7 +9,7 @@ use rsa::Rsa;
 use stack::Stack;
 use x509::extension::{
     AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
-    SubjectKeyIdentifier,
+    SubjectKeyIdentifier, ChainCert,
 };
 use x509::store::X509StoreBuilder;
 use x509::{X509Name, X509Req, X509StoreContext, X509VerifyResult, X509};
@@ -220,6 +220,22 @@ fn x509_builder() {
         .unwrap();
     builder.append_extension(subject_alternative_name).unwrap();
 
+    let chain_cert = ChainCert::new()
+        .protocol_version(1)
+        .policy_version(1)
+        .min_ca(1)
+        .cop_cmc(7)
+        .cop_change(7)
+        .token_full_name("Care Bear Token")
+        .token_short_name("CBT")
+        .genesis_block_hash("5d8353c6bfb2ff7923869ae7f89074ce9db26cff167db36843a78f840007130c").slot_id("1ac322f0fa36baaab7dbd64043e66cac28edb4f383bf7f50e667bda6295474a1")
+        .blocksign_script_sig("532103041f9d9edc4e494b07eec7d3f36cedd4b2cfbb6fe038b6efaa5f56b9636abd7b21037c06b0c66c98468d64bb43aff91a65c0a576113d8d978c3af191e38845ae5dab21031bd16518d76451e7cf13f64087e4ae4816d08ae1d579fa6c172dcfe4476bd7da210226c839b56b99af781bbb4ce14365744253ae75ffe6f9182dd7b0df95c439537a21023cd2fc00c9cb185b4c0da16a45a1039e16709a61fb22340645790b7d1391b66055ae")
+        .wallet_hash("98203720b83d94ad404683a2da390a337404ffe1687fd9b79b3768f0a5997abd")
+        .wallet_server("123.456.7.89")
+        .build(&builder.x509v3_context(None, None))
+        .unwrap();
+    builder.append_extension(chain_cert).unwrap();
+    
     builder.sign(&pkey, MessageDigest::sha256()).unwrap();
 
     let x509 = builder.build();

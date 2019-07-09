@@ -5,6 +5,7 @@ use *;
 extern "C" {
     pub fn OBJ_nid2ln(nid: c_int) -> *const c_char;
     pub fn OBJ_nid2sn(nid: c_int) -> *const c_char;
+    pub fn OBJ_ln2nid(nid: *const c_char) -> c_int;
     pub fn OBJ_obj2nid(o: *const ASN1_OBJECT) -> c_int;
     pub fn OBJ_obj2txt(
         buf: *mut c_char,
@@ -15,4 +16,6 @@ extern "C" {
 
     pub fn OBJ_find_sigid_algs(signid: c_int, pdig_nid: *mut c_int, ppkey_nid: *mut c_int)
         -> c_int;
+
+    pub fn OBJ_create(oid: *const c_char, sn: *const c_char, ln: *const c_char) -> c_int;
 }

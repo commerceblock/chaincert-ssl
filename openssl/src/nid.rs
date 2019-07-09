@@ -2,8 +2,9 @@
 use ffi;
 use libc::{c_char, c_int};
 
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::str;
+use std::string::String;
 
 use cvt_p;
 use error::ErrorStack;
@@ -47,6 +48,7 @@ pub struct SignatureAlgorithms {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Nid(c_int);
 
+
 #[allow(non_snake_case)]
 impl Nid {
     /// Create a `Nid` from an integer representation.
@@ -59,6 +61,33 @@ impl Nid {
         self.0
     }
 
+    /// Create a new object from oid, short name and long name
+    ///
+    /// This correspnds to `OBJ_create`.
+    pub fn create(oid: &str, sn: &str, ln: &str) -> Nid {
+        println!("{} {} {}", oid, sn, ln);
+        let oid = CString::new(oid).unwrap();
+        let sn = CString::new(sn).unwrap();
+        let ln = CString::new(ln).unwrap();
+        unsafe{
+            Nid::from_raw(ffi::OBJ_create(oid.as_ptr(), sn.as_ptr(), ln.as_ptr()))
+        }
+    }
+
+    /// Create a `Nid` from a string representation (long).
+    /// This corresponds to [`OBJ_ln2nid`]
+    ///
+    /// [`OBJ_ln2nid`]: https://www.openssl.org/docs/man1.1.0/crypto/OBJ_ln2nid.html
+    pub fn from_long_name(ln: &str) -> Nid {
+        let ln = CString::new(ln).unwrap();
+        unsafe {
+            Nid(ffi::OBJ_ln2nid(ln.as_ptr()))
+        }
+    }
+
+
+
+    
     /// Returns the `Nid`s of the digest and public key algorithms associated with a signature ID.
     ///
     /// This corresponds to `OBJ_find_sigid_algs`.
@@ -98,6 +127,7 @@ impl Nid {
                 .map(|nameptr| str::from_utf8(CStr::from_ptr(nameptr).to_bytes()).unwrap())
         }
     }
+
 
     pub const UNDEF: Nid = Nid(ffi::NID_undef);
     pub const ITU_T: Nid = Nid(ffi::NID_itu_t);
@@ -1047,12 +1077,13 @@ impl Nid {
     pub const AES_128_CBC_HMAC_SHA1: Nid = Nid(ffi::NID_aes_128_cbc_hmac_sha1);
     pub const AES_192_CBC_HMAC_SHA1: Nid = Nid(ffi::NID_aes_192_cbc_hmac_sha1);
     pub const AES_256_CBC_HMAC_SHA1: Nid = Nid(ffi::NID_aes_256_cbc_hmac_sha1);
+
 }
 
 #[cfg(test)]
 mod test {
     use super::Nid;
-
+    
     #[test]
     fn signature_digest() {
         let algs = Nid::SHA256WITHRSAENCRYPTION.signature_algorithms().unwrap();
@@ -1116,5 +1147,24 @@ mod test {
             undefined_nid.short_name().is_err(),
             "undefined_nid should not return a valid value"
         );
+    }
+
+    #[test]
+    fn test_object_creation(){
+        let oid="1.34.90.2.39.21.1.4.5.44.23.1";
+        let sn="aBrilliantOriginalShortName";
+        let ln="A brilliant original long name";
+        let nid = Nid::create(&oid,&sn,&ln);
+        let sname=nid.short_name();
+        assert!(!sname.is_err(),"created object short name should return a valid value.");
+        assert_eq!(sname.unwrap(), sn);
+        let lname=nid.long_name();
+        assert!(!lname.is_err(), "created object long name should return a valid value.");
+        assert_eq!(lname.unwrap(), ln);
+        assert!(nid != Nid::from_raw(0), "created object Nid should not be 0");
+        assert!(nid != Nid::UNDEF, "created object Nid should not be Nid::UNDEF");
+        let nid2 = Nid::from_long_name(&ln);
+        assert_eq!(nid, nid2);
+
     }
 }
