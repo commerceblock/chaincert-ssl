@@ -641,8 +641,8 @@ impl ChainCert {
         self.wallet_hash.push(wallet_server.to_string());
         self
     }
-    
-    /// Return the `ChainCert` extension as an `X509Extension`.
+
+        /// Return the `ChainCert` extension as an `X509Extension`.
     pub fn build(&self, ctx: &X509v3Context) -> Result<X509Extension, ErrorStack> {
         let mut value = String::new();
         let mut first = true;
@@ -690,9 +690,8 @@ impl ChainCert {
 
         X509Extension::new_nid(None, Some(ctx), ChainCert::get_nid(), &value)
     }
+    
 }
-
-
 
 fn append(value: &mut String, first: &mut bool, should: bool, element: &str) {
     if !should {

@@ -134,6 +134,23 @@ fn test_subject_alt_name() {
 }
 
 #[test]
+fn test_chaincert() {
+    let cert = include_bytes!("../../test/alt_name_cert.pem");
+    let cert = X509::from_pem(cert).unwrap();
+
+    let subject_alt_names = cert.subject_alt_names().unwrap();
+    assert_eq!(5, subject_alt_names.len());
+    assert_eq!(Some("example.com"), subject_alt_names[0].dnsname());
+    assert_eq!(subject_alt_names[1].ipaddress(), Some(&[127, 0, 0, 1][..]));
+    assert_eq!(
+        subject_alt_names[2].ipaddress(),
+        Some(&b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x01"[..])
+    );
+    assert_eq!(Some("test@example.com"), subject_alt_names[3].email());
+    assert_eq!(Some("http://www.example.com"), subject_alt_names[4].uri());
+}
+
+#[test]
 fn test_subject_alt_name_iter() {
     let cert = include_bytes!("../../test/alt_name_cert.pem");
     let cert = X509::from_pem(cert).ok().expect("Failed to load PEM");
@@ -221,6 +238,7 @@ fn x509_builder() {
     builder.append_extension(subject_alternative_name).unwrap();
 
     let chain_cert = ChainCert::new()
+        .critical()
         .protocol_version(1)
         .policy_version(1)
         .min_ca(1)
@@ -234,6 +252,7 @@ fn x509_builder() {
         .wallet_server("123.456.7.89")
         .build(&builder.x509v3_context(None, None))
         .unwrap();
+
     builder.append_extension(chain_cert).unwrap();
     
     builder.sign(&pkey, MessageDigest::sha256()).unwrap();

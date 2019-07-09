@@ -1,4 +1,4 @@
-//! The standard defining the format of public key certificates.
+//! The standard definingOA the format of public key certificates.
 //!
 //! An `X509` certificate binds an identity to a public key, and is either
 //! signed by a certificate authority (CA) or self-signed. An entity that gets
@@ -411,6 +411,27 @@ impl X509Ref {
             let stack = ffi::X509_get_ext_d2i(
                 self.as_ptr(),
                 ffi::NID_subject_alt_name,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            );
+            if stack.is_null() {
+                None
+            } else {
+                Some(Stack::from_ptr(stack as *mut _))
+            }
+        }
+    }
+
+    /// Returns this certificate's chaincert entries, if they exist.
+    ///
+    /// This corresponds to [`X509_get_ext_d2i`] called with `extensions::ChainCert::get_nid()`.
+    ///
+    /// [`X509_get_ext_d2i`]: https://www.openssl.org/docs/man1.1.0/crypto/X509_get_ext_d2i.html
+    pub fn chaincert(&self) -> Option<Stack<GeneralName>> {
+        unsafe {
+            let stack = ffi::X509_get_ext_d2i(
+                self.as_ptr(),
+                extension::ChainCert::get_nid().as_raw(),
                 ptr::null_mut(),
                 ptr::null_mut(),
             );

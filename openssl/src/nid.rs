@@ -4,7 +4,6 @@ use libc::{c_char, c_int};
 
 use std::ffi::{CStr, CString};
 use std::str;
-use std::string::String;
 
 use cvt_p;
 use error::ErrorStack;
