@@ -422,7 +422,8 @@ impl X509Ref {
         }
     }
 
-    /// Returns this certificate's chaincert entries, if they exist.
+
+        /// Returns this certificate's chaincert entries, if they exist.
     ///
     /// This corresponds to [`X509_get_ext_d2i`] called with `extensions::ChainCert::get_nid()`.
     ///
@@ -674,6 +675,23 @@ impl X509 {
             Ok(certs)
         }
     }
+
+    /// Returns this certificate's extensions, if there are any.
+    ///
+    /// This corresponds to [`X509_get0_extensions`]
+    ///
+    /// [`X509_get0_extensions`]: https://www.openssl.org/docs/man1.1.0/crypto/X509_get0_extensions.html
+    pub fn extensions(&self) -> Option<Stack<X509>> {
+        unsafe {
+            let stack = X509_get0_extensions(self.as_ptr());
+            if stack.is_null() {
+                None
+            } else {
+                Some(Stack::from_ptr(stack as *mut _))
+            }
+        }
+    }
+
 }
 
 impl Clone for X509 {
@@ -1339,7 +1357,7 @@ impl X509AlgorithmRef {
 
 cfg_if! {
     if #[cfg(any(ossl110, libressl273))] {
-        use ffi::{X509_getm_notAfter, X509_getm_notBefore, X509_up_ref, X509_get0_signature};
+        use ffi::{X509_getm_notAfter, X509_getm_notBefore, X509_up_ref, X509_get0_signature, X509_get0_extensions};
     } else {
         #[allow(bad_style)]
         unsafe fn X509_getm_notAfter(x: *mut ffi::X509) -> *mut ffi::ASN1_TIME {
