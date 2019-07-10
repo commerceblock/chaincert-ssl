@@ -269,6 +269,14 @@ fn x509_builder() {
         .unwrap();
     assert_eq!("foobar.com".as_bytes(), cn.data().as_slice());
     assert_eq!(serial, x509.serial_number().to_bn().unwrap());
+
+    //Test extensions
+    let ext_stack = x509.extensions().unwrap();
+    let mut i = 0;
+    for ext in ext_stack{
+        i = i+1;
+    }
+    assert_eq!(i,7);                         
 }
 
 #[test]

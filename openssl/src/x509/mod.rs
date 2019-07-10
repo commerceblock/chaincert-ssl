@@ -681,13 +681,13 @@ impl X509 {
     /// This corresponds to [`X509_get0_extensions`]
     ///
     /// [`X509_get0_extensions`]: https://www.openssl.org/docs/man1.1.0/crypto/X509_get0_extensions.html
-    pub fn extensions(&self) -> Option<Stack<X509>> {
+    pub fn extensions(&self) -> Option<&StackRef<X509Extension>> {
         unsafe {
             let stack = X509_get0_extensions(self.as_ptr());
             if stack.is_null() {
                 None
             } else {
-                Some(Stack::from_ptr(stack as *mut _))
+                Some(StackRef::from_ptr(stack as *mut _))
             }
         }
     }
