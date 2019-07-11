@@ -158,8 +158,8 @@ fn test_extensions() {
     let exts = cert.extensions().unwrap();
     for ext in exts{
         let data = ext.data();
-        println!("Chaincert data: {:?}", data.as_utf8());
-        println!("Chaincert data: {:?}", data.as_slice());
+        println!("Extension data: {:?}", data.as_utf8());
+        println!("Extension data: {:?}", data.as_slice());
     }
 }
 
