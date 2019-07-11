@@ -171,6 +171,9 @@ extern "C" {
     #[cfg(ossl102)]
     pub fn X509_get_signature_nid(x: *const X509) -> c_int;
 
+    #[cfg(ossl110)]
+    pub fn X509_EXTENSION_get_data(ext: *const X509_EXTENSION) -> *mut ASN1_STRING;
+    
     pub fn X509_EXTENSION_free(ext: *mut X509_EXTENSION);
 
     pub fn X509_NAME_ENTRY_free(x: *mut X509_NAME_ENTRY);

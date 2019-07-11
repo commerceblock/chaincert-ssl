@@ -1,4 +1,4 @@
-//! The standard definingOA the format of public key certificates.
+//! The standard defining the format of public key certificates.
 //!
 //! An `X509` certificate binds an identity to a public key, and is either
 //! signed by a certificate authority (CA) or self-signed. An entity that gets
@@ -733,6 +733,17 @@ impl Stackable for X509Extension {
     type StackType = ffi::stack_st_X509_EXTENSION;
 }
 
+impl X509ExtensionRef {
+    /// Get the X509Extension data as a ASN1_OCTET_STRING
+    
+    pub fn data(&self) -> &Asn1StringRef{
+        unsafe {
+            let data = ffi::X509_EXTENSION_get_data(self.as_ptr());
+            Asn1StringRef::from_ptr(data)
+        }
+    }
+}
+
 impl X509Extension {
     /// Constructs an X509 extension value. See `man x509v3_config` for information on supported
     /// names and their value formats.
@@ -1400,7 +1411,7 @@ cfg_if! {
     if #[cfg(ossl110)] {
         use ffi::{
             X509_ALGOR_get0, ASN1_STRING_get0_data, X509_STORE_CTX_get0_chain, X509_set1_notAfter,
-            X509_set1_notBefore, X509_REQ_get_version, X509_REQ_get_subject_name,
+            X509_set1_notBefore, X509_REQ_get_version, X509_REQ_get_subject_name
         };
     } else {
         use ffi::{

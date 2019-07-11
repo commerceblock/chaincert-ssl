@@ -543,6 +543,20 @@ impl ChainCert {
             return val;
         }
         let cc_nid = Nid::create(ChainCert::OID, ChainCert::SN, ChainCert::LN);
+        //Create objects for the chaincert fields
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.10","protocolVersion", "ASN.1 -  protocol version");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.11","policyVersion", "ASN.1 - policy version");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.12","minCa", "ASN.1 - min CA");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.13","copCmc", "ASN.1 - COP CMC");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.14","copChange", "ASN.1 - COP change");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.15","tokenFullName", "ASN.1 - Token full name");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.16","tokenShortName", "ASN.1 - Token short name");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.17","genesisBlockHash", "ASN.1 - Genesis block hash");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.18","contractHash", "ASN.1 - Contract hash");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.19","slotID", "ASN.1 - Slot ID");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.20","blocksignScriptSig", "ASN.1 - Blocksign script sig");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.21","walletHash", "ASN.1 - Wallet hash");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.21","walletServer", "ASN.1 - Wallet server");
         cc_nid
     }
 
@@ -648,44 +662,44 @@ impl ChainCert {
         let mut first = true;
         append(&mut value, &mut first, self.critical, "critical");
         if let Some(protocol_version) = self.protocol_version{
-            append_u32(&mut value, &mut first, protocol_version, "protocolVersion");
+      //      append_u32(&mut value, &mut first, protocol_version, "protocolVersion");
         }
         if let Some(policy_version) = self.policy_version{
-            append_u32(&mut value, &mut first, policy_version, "policyVersion");
+       //     append_u32(&mut value, &mut first, policy_version, "policyVersion");
         }
         if let Some(min_ca) = self.min_ca{
-            append_u32(&mut value, &mut first, min_ca, "minCa");
+         //   append_u32(&mut value, &mut first, min_ca, "minCa");
         }
         if let Some(cop_cmc) = self.cop_cmc{
-            append_u32(&mut value, &mut first, cop_cmc, "copCmc");
+       //     append_u32(&mut value, &mut first, cop_cmc, "copCmc");
         }
         if let Some(cop_change) = self.cop_change{
-            append_u32(&mut value, &mut first, cop_change, "copChange");
+        //    append_u32(&mut value, &mut first, cop_change, "copChange");
         }
         if let Some(ref token_full_name) = self.token_full_name{
-            append_str(&mut value, &mut first, &token_full_name, "tokenFullName");
+        //    append_str(&mut value, &mut first, &token_full_name, "tokenFullName");
         }
         if let Some(ref token_short_name) = self.token_short_name{
-            append_str(&mut value, &mut first, &token_short_name, "tokenShortName");
+        //    append_str(&mut value, &mut first, &token_short_name, "tokenShortName");
         }
         if let Some(ref genesis_block_hash) = self.genesis_block_hash{
             append_str(&mut value, &mut first, &genesis_block_hash, "genesisBlockHash");
         }
         if let Some(ref contract_hash) = self.contract_hash{
-            append_str(&mut value, &mut first,&contract_hash , "contractHash");
+        //    append_str(&mut value, &mut first,&contract_hash , "contractHash");
         }
         if let Some(ref slot_id) = self.slot_id{
-            append_str(&mut value, &mut first, &slot_id, "slotID");
+        //    append_str(&mut value, &mut first, &slot_id, "slotID");
         }
         if let Some(ref blocksign_script_sig) = self.blocksign_script_sig{
-            append_str(&mut value, &mut first, &blocksign_script_sig, "blocksignScriptSig");
+        //    append_str(&mut value, &mut first, &blocksign_script_sig, "blocksignScriptSig");
         }
 
         for wallet_hash in &self.wallet_hash {
-            append_str(&mut value, &mut first, wallet_hash, "walletHash");
+        //    append_str(&mut value, &mut first, wallet_hash, "walletHash");
         }
         for wallet_server in &self.wallet_server {
-            append_str(&mut value, &mut first, wallet_server, "walletServer");
+        //    append_str(&mut value, &mut first, wallet_server, "walletServer");
         }
 
         X509Extension::new_nid(None, Some(ctx), ChainCert::get_nid(), &value)
