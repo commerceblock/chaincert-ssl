@@ -148,6 +148,9 @@ fn test_chaincert() {
 //    );
 //    assert_eq!(Some("test@example.com"), subject_alt_names[3].email());
 //    assert_eq!(Some("http://www.example.com"), subject_alt_names[4].uri());
+
+
+
 }
 
 #[test]
@@ -250,22 +253,26 @@ fn x509_builder() {
         .unwrap();
     builder.append_extension(subject_alternative_name).unwrap();
 
-    let chain_cert = ChainCert::new()
+    let mut chain_cert_builder =
+        ChainCert::new();
+    
+    chain_cert_builder
         .critical()
         .protocol_version(1)
-        .policy_version(1)
-        .min_ca(1)
-        .cop_cmc(7)
-        .cop_change(7)
-        .token_full_name("Care Bear Token")
+        .policy_version(2)
+        .min_ca(3)
+        .cop_cmc(4)
+        .cop_change(5)
+        .token_full_name("Candy Bar Token")
         .token_short_name("CBT")
-        .genesis_block_hash("5d8353c6bfb2ff7923869ae7f89074ce9db26cff167db36843a78f840007130c").slot_id("1ac322f0fa36baaab7dbd64043e66cac28edb4f383bf7f50e667bda6295474a1")
+        .genesis_block_hash("5d8353c6bfb2ff7923869ae7f89074ce9db26cff167db36843a78f840007130c")
+        .contract_hash("6d8343c6cfb2aa7923869ae7f89074ce9db26cff167db36843a78f8400072e45")
+        .slot_id("1ac322f0fa36baaab7dbd64043e66cac28edb4f383bf7f50e667bda6295474a1")
         .blocksign_script_sig("532103041f9d9edc4e494b07eec7d3f36cedd4b2cfbb6fe038b6efaa5f56b9636abd7b21037c06b0c66c98468d64bb43aff91a65c0a576113d8d978c3af191e38845ae5dab21031bd16518d76451e7cf13f64087e4ae4816d08ae1d579fa6c172dcfe4476bd7da210226c839b56b99af781bbb4ce14365744253ae75ffe6f9182dd7b0df95c439537a21023cd2fc00c9cb185b4c0da16a45a1039e16709a61fb22340645790b7d1391b66055ae")
         .wallet_hash("98203720b83d94ad404683a2da390a337404ffe1687fd9b79b3768f0a5997abd")
-        .wallet_server("123.456.7.89")
-        .build(&builder.x509v3_context(None, None))
-        .unwrap();
+        .wallet_server("123.456.7.89");
 
+    let chain_cert =  chain_cert_builder.build(&builder.x509v3_context(None, None)).unwrap();
     builder.append_extension(chain_cert).unwrap();
     
     builder.sign(&pkey, MessageDigest::sha256()).unwrap();
@@ -286,9 +293,20 @@ fn x509_builder() {
     //Test extensions
     let ext_stack = x509.extensions().unwrap();
     let mut i = 0;
+    let mut chain_cert_read: Option<ChainCert> = None;
     for ext in ext_stack{
         i = i+1;
+        match ChainCert::from_x509extension(ext){
+            Ok(cc_read)=>{
+                chain_cert_read = Some(cc_read);
+            },
+            Err(_e) => (),
+        }
     }
+    let ccr = chain_cert_read.unwrap();
+    assert_eq!(ccr, chain_cert_builder);
+    chain_cert_builder.contract_hash("a");
+    assert_ne!(ccr, chain_cert_builder);
     assert_eq!(i,7);                         
 }
 

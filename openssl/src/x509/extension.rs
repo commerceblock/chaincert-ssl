@@ -1,4 +1,4 @@
-//! AddString extensions to an `X509` certificate or certificate request.
+//! AddString extensions to an `X509` certificate or certificateA rAequest.
 //!
 //! The extensions defined for X.509 v3 certificates provide methods for
 //! associating additional attributes with users or public keys and for
@@ -21,10 +21,17 @@
 //! }
 //! ```
 use std::fmt::Write;
+use std::fmt;
 
 use error::ErrorStack;
 use nid::Nid;
-use x509::{X509Extension, X509v3Context};
+use x509::{X509Extension, X509ExtensionRef, X509v3Context};
+
+use std::vec::Vec;
+
+use std::error;
+
+extern crate csv;
 
 /// An extension which indicates whether a certificate is a CA certificate.
 pub struct BasicConstraints {
@@ -509,6 +516,8 @@ impl SubjectAlternativeName {
 
 /// An extension that allows a cryptoasset identity to be bound to the
 /// the certificate.
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub struct ChainCert {
     critical: bool,
     protocol_version: Option<u32>,
@@ -524,13 +533,154 @@ pub struct ChainCert {
     blocksign_script_sig: Option<String>,
     wallet_hash: Vec<String>,
     wallet_server: Vec<String>,
+    misc: Vec<String>,
 }
+
+pub enum ExtensionError {
+    IncorrectType,
+    SizeTooLarge,
+    IncorrectSize,
+    BadFormat,
+    UnknownParameter
+}
+
+impl fmt::Debug for ExtensionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let message;
+        match *self{
+            ExtensionError::IncorrectType => message = String::from("incorrect type"),
+            ExtensionError::SizeTooLarge => message = String::from("size too large"),
+            ExtensionError::IncorrectSize => message = String::from("incorrect size"),
+            ExtensionError::BadFormat => message = String::from("bad format"),
+            ExtensionError::UnknownParameter => message = String::from("unknown parameter"),
+        }
+        write!(f, "extension error: {}", message)
+    }
+}
+
+impl fmt::Display for ExtensionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let message;
+        match *self{
+            ExtensionError::IncorrectType => message = String::from("incorrect type"),
+            ExtensionError::SizeTooLarge => message = String::from("size too large"),
+            ExtensionError::IncorrectSize => message = String::from("incorrect size"),
+            ExtensionError::BadFormat => message = String::from("bad format"),
+            ExtensionError::UnknownParameter => message = String::from("unknown parameter"),
+        }
+        write!(f, "extension error: {}", message)
+    }
+}
+
+// This is important for other errors to wrap this one.
+impl error::Error for ExtensionError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
 
 impl ChainCert {
     pub const OID: &'static str = "1.34.90.2.39.21.1.4.5.44.23.2";
     pub const SN: &'static str = "ChainCert";
     pub const LN: &'static str = "ChainCert blockchain certificate extension by www.commerceblock.com";
 
+    pub fn from_x509extension(ext: &X509ExtensionRef) -> Result<ChainCert, Box<error::Error>> {
+        let data = ext.data().as_slice();
+        let length = data.len() as usize;
+        let t: i32 = data[0] as i32;
+        if t != ffi::V_ASN1_UTF8STRING {
+            return Err(ExtensionError::IncorrectType.into());
+        }
+
+        let sizetype: usize = 1;
+        let mut buffstart: usize = 0;
+        let mut sizebytes: usize;
+        let mut buffsize_r: usize = 0;
+
+        let mut sizes: Vec<usize> = Vec::new();
+        
+        if length < std::u8::MAX as usize {
+            sizebytes = 1;
+            buffstart = sizebytes + sizetype;
+            buffsize_r = data[1] as usize;
+        }
+        if length > std::u8::MAX as usize {
+            sizebytes = 2;
+            let mut a: [u8; 2] = Default::default();
+            buffstart = sizebytes + sizetype;
+            a.copy_from_slice(&data[1..buffstart]);
+            buffsize_r = u16::from_le_bytes(a) as usize;
+        }
+        if length > std::u16::MAX as usize{
+            sizebytes = 4;
+            let mut a: [u8; 4] = Default::default();
+            buffstart = sizebytes + sizetype;
+            a.copy_from_slice(&data[1..buffstart]);
+            buffsize_r = u32::from_le_bytes(a) as usize;
+        }
+        if length > std::u32::MAX as usize{
+            return Err(ExtensionError::SizeTooLarge.into());
+        }
+
+        let buffsize = length - buffstart;
+
+        sizes.push(buffsize);
+        sizes.push(buffsize_r);
+        
+        let dat_str = String::from_utf8(data[buffstart+1..].to_vec())?;
+       
+        let split = dat_str.split(",");
+
+        let mut cert = ChainCert::new();
+        
+        for s in split {
+            let substr = s.replace("ASN1:UTF8String:","");
+            let split = substr.split(":");
+            let mut vec = split.collect::<Vec<&str>>();
+            match vec[0].as_ref(){
+                "critical"=> {
+                    cert.critical=true
+                }
+                "protocolVersion"=> {
+                    let val: u32 = vec[1].parse::<u32>()?;
+                    cert.protocol_version = Some(val);
+                },
+                "policyVersion"=> {
+                    let val: u32 = vec[1].parse::<u32>()?;
+                    cert.policy_version = Some(val);
+                },
+                "minCa"=> {
+                    let val: u32 = vec[1].parse::<u32>()?;
+                    cert.min_ca = Some(val);
+                },
+                "copCmc"=> {
+                    let val: u32 = vec[1].parse::<u32>()?;
+                    cert.cop_cmc = Some(val);
+                },
+                "copChange"=> {
+                    let val: u32 = vec[1].parse::<u32>()?;
+                    cert.cop_change = Some(val);
+                },
+                "tokenFullName"=> cert.token_full_name = Some(String::from(vec[1])),
+                "tokenShortName"=> cert.token_short_name = Some(String::from(vec[1])),
+                "genesisBlockHash"=> cert.genesis_block_hash = Some(String::from(vec[1])),
+                "contractHash"=> cert.contract_hash = Some(String::from(vec[1])),
+                "slotID"=> cert.slot_id = Some(String::from(vec[1])),
+                "blocksignScriptSig"=> cert.blocksign_script_sig = Some(String::from(vec[1])),
+                "walletHash"=> cert.wallet_hash.push(String::from(vec[1])),
+                "walletServer"=> cert.wallet_server.push(String::from(vec[1])),
+                _ =>  {
+                    for item in vec{
+                        cert.misc.push(String::from(item));
+                    }
+                },
+            }
+        }
+        
+        Ok(cert)
+    }
 
     //Get the CHAINCERT Nid, creating a new one if necessary
     pub fn get_nid() -> Nid {
@@ -577,6 +727,7 @@ impl ChainCert {
             blocksign_script_sig: None,
             wallet_hash: vec![],
             wallet_server: vec![],
+            misc: vec![],
         }
     }
 
@@ -652,7 +803,7 @@ impl ChainCert {
     }
 
     pub fn wallet_server(&mut self, wallet_server: &str) -> &mut ChainCert {
-        self.wallet_hash.push(wallet_server.to_string());
+        self.wallet_server.push(wallet_server.to_string());
         self
     }
 
@@ -660,7 +811,8 @@ impl ChainCert {
     pub fn build(&self, ctx: &X509v3Context) -> Result<X509Extension, ErrorStack> {
         let mut value = String::new();
         let mut first = true;
-        append(&mut value, &mut first, self.critical, "critical");
+        append(&mut value, &mut first, self.critical, "ASN1:UTF8String:critical");
+        
         if let Some(protocol_version) = self.protocol_version{
             append_u32(&mut value, &mut first, protocol_version, "protocolVersion");
         }
@@ -724,6 +876,7 @@ fn append_str(value: &mut String, first: &mut bool, val: &str, element: &str) {
     if !*first {
         value.push(',');
     }
+
     *first = false;
     //Required for unknown extensions
     value.push_str("ASN1:UTF8String:");

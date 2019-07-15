@@ -4,6 +4,7 @@ use *;
 
 pub const V_ASN1_UTCTIME: c_int = 23;
 pub const V_ASN1_GENERALIZEDTIME: c_int = 24;
+pub const V_ASN1_UTF8STRING: c_int = 12;
 
 pub const MBSTRING_FLAG: c_int = 0x1000;
 pub const MBSTRING_UTF8: c_int = MBSTRING_FLAG;
