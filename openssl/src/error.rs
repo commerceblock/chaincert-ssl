@@ -55,6 +55,15 @@ impl ErrorStack {
     pub fn errors(&self) -> &[Error] {
         &self.0
     }
+
+    /// Returns the length of the stack.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn has_errors(&self) -> bool {
+        self.len() > 0
+    }
 }
 
 impl fmt::Display for ErrorStack {
@@ -92,6 +101,7 @@ impl From<ErrorStack> for fmt::Error {
         fmt::Error
     }
 }
+
 
 /// An error reported from OpenSSL.
 #[derive(Clone)]

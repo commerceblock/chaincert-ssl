@@ -124,7 +124,6 @@ extern crate openssl_sys as ffi;
 extern crate hex;
 #[cfg(test)]
 extern crate tempdir;
-
 #[doc(inline)]
 pub use ffi::init;
 

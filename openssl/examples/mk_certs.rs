@@ -43,7 +43,9 @@ fn mk_ca_cert() -> Result<(X509, PKey<Private>), ErrorStack> {
     let not_after = Asn1Time::days_from_now(365)?;
     cert_builder.set_not_after(&not_after)?;
 
-    cert_builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
+    let bc = BasicConstraints::new().critical().ca().build().map_err(|e| e.into())?;
+    
+    cert_builder.append_extension(bc)?;
     cert_builder.append_extension(
         KeyUsage::new()
             .critical()
