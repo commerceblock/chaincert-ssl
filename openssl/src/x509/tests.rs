@@ -9,8 +9,9 @@ use rsa::Rsa;
 use stack::Stack;
 use x509::extension::{
     AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
-    SubjectKeyIdentifier, ChainCert,
+    SubjectKeyIdentifier, ChainCert, ChainCertContext
 };
+
 use x509::store::X509StoreBuilder;
 use x509::{X509Name, X509Req, X509StoreContext, X509VerifyResult, X509};
 
@@ -253,10 +254,11 @@ fn x509_builder() {
         .unwrap();
     builder.append_extension(subject_alternative_name).unwrap();
 
-    let mut chain_cert_builder =
-        ChainCert::new();
+    let mut chain_cert_builder = ChainCert::new();
+
+    let gen_hash = "5d8353c6bfb2ff7923869ae7f89074ce9db26cff167db36843a78f840007130c";
     
-    chain_cert_builder
+    let chain_cert=chain_cert_builder
         .critical()
         .protocol_version(1)
         .policy_version(2)
@@ -270,9 +272,9 @@ fn x509_builder() {
         .slot_id("1ac322f0fa36baaab7dbd64043e66cac28edb4f383bf7f50e667bda6295474a1")
         .blocksign_script_sig("532103041f9d9edc4e494b07eec7d3f36cedd4b2cfbb6fe038b6efaa5f56b9636abd7b21037c06b0c66c98468d64bb43aff91a65c0a576113d8d978c3af191e38845ae5dab21031bd16518d76451e7cf13f64087e4ae4816d08ae1d579fa6c172dcfe4476bd7da210226c839b56b99af781bbb4ce14365744253ae75ffe6f9182dd7b0df95c439537a21023cd2fc00c9cb185b4c0da16a45a1039e16709a61fb22340645790b7d1391b66055ae")
         .wallet_hash("98203720b83d94ad404683a2da390a337404ffe1687fd9b79b3768f0a5997abd")
-        .wallet_server("123.456.7.89");
+        .wallet_server("123.456.7.89")
+        .build(&builder.x509v3_context(None, None)).unwrap();
 
-    let chain_cert =  chain_cert_builder.build(&builder.x509v3_context(None, None)).unwrap();
     builder.append_extension(chain_cert).unwrap();
     
     builder.sign(&pkey, MessageDigest::sha256()).unwrap();
@@ -293,20 +295,78 @@ fn x509_builder() {
     //Test extensions
     let ext_stack = x509.extensions().unwrap();
     let mut i = 0;
-    let mut chain_cert_read: Option<ChainCert> = None;
+    let mut chain_cert_read = None;
     for ext in ext_stack{
         i = i+1;
         match ChainCert::from_x509extension(ext){
             Ok(cc_read)=>{
                 chain_cert_read = Some(cc_read);
+                continue;
             },
             Err(_e) => (),
         }
     }
-    let ccr = chain_cert_read.unwrap();
-    assert_eq!(ccr, chain_cert_builder);
-    chain_cert_builder.contract_hash("a");
-    assert_ne!(ccr, chain_cert_builder);
+    let mut ccr = chain_cert_read.unwrap();
+    let ctx = ChainCertContext::from_chaincert(&chain_cert_builder);
+  //  assert_eq!(ccr.verify(&ctx).unwrap(), true);
+
+    //Test for parameter mismatch
+    let wrong_gen_hash = "0123456789abcdef";
+    ccr.genesis_block_hash(wrong_gen_hash);
+    match ccr.verify(&ctx){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value mismatch");
+            assert_eq!(err.data().unwrap(), format!(": {}, expected {}, got {}",
+                                                    "genesisBlockHash",
+                                                    gen_hash,
+                                                    wrong_gen_hash));
+        }
+    }
+
+    let mut cc_with_gen = ChainCert::new();
+    cc_with_gen
+        .critical()
+        .genesis_block_hash(gen_hash);
+
+    let mut cc_without_gen = ChainCert::new();
+    cc_without_gen
+        .critical();
+
+    let ctx_without_gen = ChainCertContext::from_chaincert(&cc_without_gen);
+    let ctx_with_gen = ChainCertContext::from_chaincert(&cc_with_gen);
+
+    match cc_with_gen.verify(&ctx_without_gen){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "genesisBlockHash in context");
+        }
+    }
+
+    match cc_without_gen.verify(&ctx_with_gen){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "genesisBlockHash in certificate");
+        }
+    }
+    
     assert_eq!(i,7);                         
 }
 

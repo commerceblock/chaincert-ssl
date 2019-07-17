@@ -515,15 +515,25 @@ impl SubjectAlternativeName {
 }
 
 /// A context for verifying chaincert data
-/// Extends the X509v3Xontext
+/// Extends the X509v3Context
 pub struct ChainCertContext<'a> {
     chain_cert: &'a ChainCert
 }
 
+impl<'a> ChainCertContext<'a> {
+    pub fn from_chaincert(cc: &'a ChainCert) -> ChainCertContext{
+        ChainCertContext{
+            chain_cert: cc
+        }
+    }
+    pub fn chain_cert(&self) -> &ChainCert {
+        self.chain_cert
+    }
+}
+
 /// An extension that allows a cryptoasset identity to be bound to the
 /// the certificate.
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChainCert {
     critical: bool,
     protocol_version: Option<u32>,
@@ -552,7 +562,7 @@ impl ChainCert {
             Some(s) => {
                 match s.parse::<u32>(){
                     Err(e) => {
-                        put_error!(Extension::FROM_X509EXTENSION, Extension::PARSE_ERROR, ": {}", e.to_string());
+                        put_error!(Extension::PARSE_U32, Extension::PARSE_ERROR, ": {}", e.to_string());
                         None
                     },
                     Ok(v) => Some(v)
@@ -860,12 +870,12 @@ impl ChainCert {
             Some(ref val) => {
                 match ctx.chain_cert.genesis_block_hash{
                     None => {
-                        put_error!(Extension::FROM_X509EXTENSION, Extension::VALUE_MISSING, ": {} in {}",  par, "context");
+                        put_error!(Extension::VERIFY, Extension::VALUE_MISSING, "{} in {}",  par, "context");
                         return Err(ErrorStack::get());
                     }
                     Some(ref val_ctx) => {
                         if val != val_ctx {
-                            put_error!(Extension::FROM_X509EXTENSION, Extension::VALUE_MISMATCH,
+                            put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH,
                                        ": {}, expected {}, got {}",  par, val_ctx, val);
                             return  Err(ErrorStack::get());
                         }
@@ -874,7 +884,7 @@ impl ChainCert {
                 }
             },
             None => {
-                put_error!(Extension::FROM_X509EXTENSION, Extension::VALUE_MISSING, "{} in {}",  par, "certificate");
+                put_error!(Extension::VERIFY, Extension::VALUE_MISSING, "{} in {}",  par, "certificate");
                 return  Err(ErrorStack::get());
             },
         }
@@ -913,10 +923,12 @@ fn append_u32(value: &mut String, first: &mut bool, val: u32, element: &str) {
 
 
 openssl_errors::openssl_errors! {
-    library Extension("extension library"){
+    pub library Extension("extension library"){
         functions{
             BUILD("function build");
             FROM_X509EXTENSION("function from_x509extension");
+            VERIFY("function verify");
+            PARSE_U32("function parse_u32");
         }
         reasons {
             VALUE_MISSING("value missing");
