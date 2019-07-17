@@ -384,7 +384,7 @@ fn x509_builder() {
             assert_eq!(err.library().unwrap(),"extension library");
             assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value missing");
-            assert_eq!(err.data().unwrap(), "tokenShortName in context but not in certificate");
+            assert_eq!(err.data().unwrap(), "contractHash in context but not in certificate");
         }
     }
     
@@ -409,7 +409,7 @@ fn x509_builder() {
     let mut cc_with_bss = ChainCert::new();
     cc_with_bss
         .critical()
-        .block_sign_script_sig("afcd66356dde6aae");
+        .blocksign_script_sig("afcd66356dde6aae");
 
     match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_bss)){
         Ok(_res)=>panic!("expected this test to fail!"),
@@ -424,6 +424,55 @@ fn x509_builder() {
         }
     }
 
+    let mut cc_wallethash = ChainCert::new();
+    cc_wallethash
+        .wallet_hash("acdef65a")
+        .wallet_hash("ecfea459");
+
+    let mut cc_wallethash_2 = ChainCert::new();
+    cc_wallethash_2
+        .wallet_hash("ecfea459");
+
+    //The context contains a wallet hash present in the certificate wallet hash array
+    assert_eq!(cc_wallethash.verify(&ChainCertContext::from_chaincert(&cc_wallethash_2)).unwrap(), true);
+    
+    match cc_wallethash_2.verify(&ChainCertContext::from_chaincert(&cc_wallethash)){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "vector walletHash does not contain acdef65a");
+        }
+    }
+
+    let mut cc_walletserver = ChainCert::new();
+    cc_walletserver
+        .wallet_server("1.2.3.4")
+        .wallet_server("5.6.7.8");
+
+    let mut cc_walletserver_2 = ChainCert::new();
+    cc_walletserver_2
+        .wallet_server("1.2.3.4");
+
+    //The context contains a wallet hash present in the certificate wallet hash array
+    assert_eq!(cc_walletserver.verify(&ChainCertContext::from_chaincert(&cc_walletserver_2)).unwrap(), true);
+    
+    match cc_walletserver_2.verify(&ChainCertContext::from_chaincert(&cc_walletserver)){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "vector walletServer does not contain 5.6.7.8");
+        }
+    }
 }
 
 #[test]

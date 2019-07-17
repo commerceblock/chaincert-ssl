@@ -883,7 +883,7 @@ impl ChainCert {
             },
             None => {
                 match val_ctx{
-                    Some(ref val_ctx)  => {
+                    Some(ref _val_ctx)  => {
                         put_error!(Extension::VERIFY, Extension::VALUE_MISSING,
                                    "{} in context but not in certificate", par);
                         return  Err(ErrorStack::get());
@@ -891,6 +891,27 @@ impl ChainCert {
                     None => Ok(true)
                 }
             },
+        }
+    }
+
+    //verify that the string vector contains all the elements required by the context
+    fn match_str_vec_par(&self, par: &String, val: &Vec<String>, val_ctx: &Vec<String>)
+                         -> Result<bool, ErrorStack>{
+        match val_ctx.len(){
+            0 => Ok(true),
+            _ => {
+                for v in val_ctx{
+                    match val.contains(v){
+                        true => continue,
+                        false => {
+                            put_error!(Extension::VERIFY, Extension::VALUE_MISSING,
+                                       "vector {} does not contain {}",  par, v);
+                            return  Err(ErrorStack::get());
+                        }
+                    }
+                }
+                Ok(true)
+            }
         }
     }
 
@@ -913,6 +934,12 @@ impl ChainCert {
         self.match_str_par(&String::from("blocksignScriptSig"),
                            &self.blocksign_script_sig,
                            &ctx.chain_cert.blocksign_script_sig)?;
+        self.match_str_vec_par(&String::from("walletHash"),
+                           &self.wallet_hash,
+                           &ctx.chain_cert.wallet_hash)?;
+        self.match_str_vec_par(&String::from("walletServer"),
+                           &self.wallet_server,
+                           &ctx.chain_cert.wallet_server)?;
         Ok(true)
     }
 }
