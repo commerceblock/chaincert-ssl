@@ -135,26 +135,6 @@ fn test_subject_alt_name() {
 }
 
 #[test]
-fn test_chaincert() {
-//    let cert = include_bytes!("../../test/alt_name_cert.pem");
-//    let cert = X509::from_pem(cert).unwrap();
-
-//    let chaincert = cert.chaincert().unwrap();
-//    assert_eq!(5, chaincert.len());
-//    assert_eq!(Some("example.com"), chaincert[0].dnsname());
-//    assert_eq!(subject_alt_names[1].ipaddress(), Some(&[127, 0, 0, 1][..]));
-//    assert_eq!(
-//        subject_alt_names[2].ipaddress(),
-//        Some(&b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x01"[..])
-//    );
-//    assert_eq!(Some("test@example.com"), subject_alt_names[3].email());
-//    assert_eq!(Some("http://www.example.com"), subject_alt_names[4].uri());
-
-
-
-}
-
-#[test]
 fn test_extensions() {
     let cert = include_bytes!("../../test/alt_name_cert.pem");
     let cert = X509::from_pem(cert).unwrap();
@@ -306,6 +286,8 @@ fn x509_builder() {
             Err(_e) => (),
         }
     }
+    assert_eq!(i,7);
+    
     let mut ccr = chain_cert_read.unwrap();
     let ctx = ChainCertContext::from_chaincert(&chain_cert_builder);
   //  assert_eq!(ccr.verify(&ctx).unwrap(), true);
@@ -334,14 +316,12 @@ fn x509_builder() {
         .critical()
         .genesis_block_hash(gen_hash);
 
-    let mut cc_without_gen = ChainCert::new();
-    cc_without_gen
-        .critical();
+    let mut cc_blank = ChainCert::new();
+    cc_blank.critical();
 
-    let ctx_without_gen = ChainCertContext::from_chaincert(&cc_without_gen);
-    let ctx_with_gen = ChainCertContext::from_chaincert(&cc_with_gen);
+    cc_with_gen.verify(&ChainCertContext::from_chaincert(&cc_blank)).unwrap();
 
-    match cc_with_gen.verify(&ctx_without_gen){
+    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_gen)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -350,11 +330,16 @@ fn x509_builder() {
             assert_eq!(err.library().unwrap(),"extension library");
             assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value missing");
-            assert_eq!(err.data().unwrap(), "genesisBlockHash in context");
+            assert_eq!(err.data().unwrap(), "genesisBlockHash in context but not in certificate");
         }
     }
 
-    match cc_without_gen.verify(&ctx_with_gen){
+    let mut cc_with_fullname = ChainCert::new();
+    cc_with_fullname
+        .critical()
+        .token_full_name("Candy Bar Token");
+
+    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_fullname)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -363,11 +348,82 @@ fn x509_builder() {
             assert_eq!(err.library().unwrap(),"extension library");
             assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value missing");
-            assert_eq!(err.data().unwrap(), "genesisBlockHash in certificate");
+            assert_eq!(err.data().unwrap(), "tokenFullName in context but not in certificate");
         }
     }
     
-    assert_eq!(i,7);                         
+    let mut cc_with_shortname = ChainCert::new();
+    cc_with_shortname
+        .critical()
+        .token_short_name("CBT");
+
+    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_shortname)){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "tokenShortName in context but not in certificate");
+        }
+    }
+    
+    let mut cc_with_chash = ChainCert::new();
+    cc_with_chash
+        .critical()
+        .contract_hash("aef64738bce873de");
+
+    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_chash)){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "tokenShortName in context but not in certificate");
+        }
+    }
+    
+    let mut cc_with_slotid = ChainCert::new();
+    cc_with_slotid
+        .critical()
+        .slot_id("aabbbccd66554433");
+
+    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_slotid)){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "slotID in context but not in certificate");
+        }
+    }
+
+    let mut cc_with_bss = ChainCert::new();
+    cc_with_bss
+        .critical()
+        .block_sign_script_sig("afcd66356dde6aae");
+
+    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_bss)){
+        Ok(_res)=>panic!("expected this test to fail!"),
+        //Check the expected error is returned
+        Err(e)=>{
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value missing");
+            assert_eq!(err.data().unwrap(), "blocksignScriptSig in context but not in certificate");
+        }
+    }
+
 }
 
 #[test]

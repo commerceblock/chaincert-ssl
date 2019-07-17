@@ -864,14 +864,12 @@ impl ChainCert {
         X509Extension::new_nid(None, Some(ctx), ChainCert::get_nid(), &value)
     }
 
-    pub fn verify(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
-        let par = String::from("genesisBlockHash");
-        match self.genesis_block_hash{
+    fn match_str_par(&self, par: &String, val: &Option<String>, val_ctx: &Option<String>) -> Result<bool, ErrorStack>{
+        match val{
             Some(ref val) => {
-                match ctx.chain_cert.genesis_block_hash{
+                match val_ctx{
                     None => {
-                        put_error!(Extension::VERIFY, Extension::VALUE_MISSING, "{} in {}",  par, "context");
-                        return Err(ErrorStack::get());
+                        Ok(true)
                     }
                     Some(ref val_ctx) => {
                         if val != val_ctx {
@@ -884,10 +882,38 @@ impl ChainCert {
                 }
             },
             None => {
-                put_error!(Extension::VERIFY, Extension::VALUE_MISSING, "{} in {}",  par, "certificate");
-                return  Err(ErrorStack::get());
+                match val_ctx{
+                    Some(ref val_ctx)  => {
+                        put_error!(Extension::VERIFY, Extension::VALUE_MISSING,
+                                   "{} in context but not in certificate", par);
+                        return  Err(ErrorStack::get());
+                    },
+                    None => Ok(true)
+                }
             },
         }
+    }
+
+    pub fn verify(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
+        self.match_str_par(&String::from("tokenFullName"),
+                           &self.token_full_name,
+                           &ctx.chain_cert.token_full_name)?;
+        self.match_str_par(&String::from("tokenShortName"),
+                           &self.token_short_name,
+                           &ctx.chain_cert.token_short_name)?;
+        self.match_str_par(&String::from("genesisBlockHash"),
+                           &self.genesis_block_hash,
+                           &ctx.chain_cert.genesis_block_hash)?;
+        self.match_str_par(&String::from("contractHash"),
+                           &self.contract_hash,
+                           &ctx.chain_cert.contract_hash)?;
+        self.match_str_par(&String::from("slotID"),
+                           &self.slot_id,
+                           &ctx.chain_cert.slot_id)?;
+        self.match_str_par(&String::from("blocksignScriptSig"),
+                           &self.blocksign_script_sig,
+                           &ctx.chain_cert.blocksign_script_sig)?;
+        Ok(true)
     }
 }
 
