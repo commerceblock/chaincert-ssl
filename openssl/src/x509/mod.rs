@@ -375,6 +375,20 @@ foreign_type_and_impl_send_sync! {
     pub struct X509Ref;
 }
 
+impl PartialEq for X509 {
+    fn eq(&self, other: &Self) -> bool {
+        true
+    }
+}
+
+impl std::hash::Hash for X509 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.digest(MessageDigest::sha1()).unwrap().hash(state);
+    }
+}
+
+impl Eq for X509 {}
+
 impl X509Ref {
     /// Returns this certificate's subject name.
     ///
@@ -604,6 +618,22 @@ impl X509Ref {
         /// [`i2d_X509`]: https://www.openssl.org/docs/man1.1.0/crypto/i2d_X509.html
         to_der,
         ffi::i2d_X509
+    }
+
+    /// Returns this certificate's extensions, if there are any.
+    ///
+    /// This corresponds to [`X509_get0_extensions`]
+    ///
+    /// [`X509_get0_extensions`]: https://www.openssl.org/docs/man1.1.0/crypto/X509_get0_extensions.html
+    pub fn extensions(&self) -> Option<&StackRef<X509Extension>> {
+        unsafe {
+            let stack = X509_get0_extensions(self.as_ptr());
+            if stack.is_null() {
+                None
+            } else {
+                Some(StackRef::from_ptr(stack as *mut _))
+            }
+        }
     }
 }
 

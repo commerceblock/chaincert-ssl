@@ -9,7 +9,7 @@ use rsa::Rsa;
 use stack::Stack;
 use x509::extension::{
     AuthorityKeyIdentifier, BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
-    SubjectKeyIdentifier, ChainCert, ChainCertContext
+    SubjectKeyIdentifier, ChainCert, ChainCertContext, ChainCertMC
 };
 
 use x509::store::X509StoreBuilder;
@@ -289,7 +289,14 @@ fn x509_builder() {
     assert_eq!(i,7);
     
     let mut ccr = chain_cert_read.unwrap();
-    let ctx = ChainCertContext::from_chaincert(&chain_cert_builder);
+    //let ca = include_bytes!("../../test/root-ca.pem");
+//    let ca = X509::from_pem(ca).unwrap();
+  //  let chain = Stack::new().unwrap();
+    let mut store_bldr = X509StoreBuilder::new().unwrap();
+//    store_bldr.add_cert(ca).unwrap();
+    let store = store_bldr.build();
+    
+    let ctx = ChainCertContext::new(&chain_cert_builder, None);
   //  assert_eq!(ccr.verify(&ctx).unwrap(), true);
 
     //Test for parameter mismatch
@@ -319,9 +326,9 @@ fn x509_builder() {
     let mut cc_blank = ChainCert::new();
     cc_blank.critical();
 
-    cc_with_gen.verify(&ChainCertContext::from_chaincert(&cc_blank)).unwrap();
+    cc_with_gen.verify(&ChainCertContext::new(&cc_blank, None)).unwrap();
 
-    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_gen)){
+    match cc_blank.verify(&ChainCertContext::new(&cc_with_gen, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -339,7 +346,7 @@ fn x509_builder() {
         .critical()
         .token_full_name("Candy Bar Token");
 
-    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_fullname)){
+    match cc_blank.verify(&ChainCertContext::new(&cc_with_fullname, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -357,7 +364,7 @@ fn x509_builder() {
         .critical()
         .token_short_name("CBT");
 
-    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_shortname)){
+    match cc_blank.verify(&ChainCertContext::new(&cc_with_shortname, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -375,7 +382,7 @@ fn x509_builder() {
         .critical()
         .contract_hash("aef64738bce873de");
 
-    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_chash)){
+    match cc_blank.verify(&ChainCertContext::new(&cc_with_chash, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -393,7 +400,7 @@ fn x509_builder() {
         .critical()
         .slot_id("aabbbccd66554433");
 
-    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_slotid)){
+    match cc_blank.verify(&ChainCertContext::new(&cc_with_slotid, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -411,7 +418,7 @@ fn x509_builder() {
         .critical()
         .blocksign_script_sig("afcd66356dde6aae");
 
-    match cc_blank.verify(&ChainCertContext::from_chaincert(&cc_with_bss)){
+    match cc_blank.verify(&ChainCertContext::new(&cc_with_bss, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -434,9 +441,9 @@ fn x509_builder() {
         .wallet_hash("ecfea459");
 
     //The context contains a wallet hash present in the certificate wallet hash array
-    assert_eq!(cc_wallethash.verify(&ChainCertContext::from_chaincert(&cc_wallethash_2)).unwrap(), true);
+    assert_eq!(cc_wallethash.verify(&ChainCertContext::new(&cc_wallethash_2, None)).unwrap(), true);
     
-    match cc_wallethash_2.verify(&ChainCertContext::from_chaincert(&cc_wallethash)){
+    match cc_wallethash_2.verify(&ChainCertContext::new(&cc_wallethash, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -459,9 +466,9 @@ fn x509_builder() {
         .wallet_server("1.2.3.4");
 
     //The context contains a wallet hash present in the certificate wallet hash array
-    assert_eq!(cc_walletserver.verify(&ChainCertContext::from_chaincert(&cc_walletserver_2)).unwrap(), true);
+    assert_eq!(cc_walletserver.verify(&ChainCertContext::new(&cc_walletserver_2, None)).unwrap(), true);
     
-    match cc_walletserver_2.verify(&ChainCertContext::from_chaincert(&cc_walletserver)){
+    match cc_walletserver_2.verify(&ChainCertContext::new(&cc_walletserver, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
         Err(e)=>{
@@ -581,9 +588,6 @@ fn test_verify_cert() {
     assert!(context
         .init(&store, &cert, &chain, |c| c.verify_cert())
         .unwrap());
-    assert!(context
-        .init(&store, &cert, &chain, |c| c.verify_cert())
-        .unwrap());
 }
 
 #[test]
@@ -602,4 +606,51 @@ fn test_verify_fails() {
     assert!(!context
         .init(&store, &cert, &chain, |c| c.verify_cert())
         .unwrap());
+}
+
+#[test]
+fn test_chaincertmc_from_pem() {
+    let certs = include_bytes!("../../test/chaincert/coldbeertoken-chain.pem");
+    let certs = ChainCertMC::from_pem(certs).unwrap();
+    let mut chain_cert_builder = ChainCert::new();
+    let mut builder = X509::builder().unwrap();
+    
+    let chain_cert=chain_cert_builder
+        .critical()
+        .protocol_version(1)
+        .policy_version(2)
+        .min_ca(2)
+        .cop_cmc(3)
+        .cop_change(3)
+        .token_full_name("Cold Beer Token")
+        .token_short_name("CBT")
+        .genesis_block_hash("a6b3c4aaaabbbcc654")
+        .contract_hash("444eecd66a23")
+        .slot_id("12234abc")
+        .blocksign_script_sig("223dccba773384eebc")
+        .wallet_hash("33aabbc")
+        .wallet_server("123.4.56.3")
+        .build(&builder.x509v3_context(None, None)).unwrap();
+
+    let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
+    let ca1 = X509::from_pem(ca1).unwrap();
+    let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
+    let ca2 = X509::from_pem(ca2).unwrap();
+    let ca3 = include_bytes!("../../test/chaincert/ca/root-ca-3.crt");
+    let ca3 = X509::from_pem(ca3).unwrap();
+
+    let mut store_bldr = X509StoreBuilder::new().unwrap();
+
+    store_bldr.add_cert(ca1).unwrap();
+    store_bldr.add_cert(ca2).unwrap();
+    store_bldr.add_cert(ca3).unwrap();
+    
+    let store = store_bldr.build();
+    
+    let ctx = ChainCertContext::new(&chain_cert_builder, Some(&store));
+
+//    assert!(certs.verify(&ctx).unwrap());
+    
+        //X509::stack_from_pem(certs).unwrap();
+
 }
