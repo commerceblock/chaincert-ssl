@@ -609,12 +609,12 @@ fn test_verify_fails() {
 }
 
 #[test]
-fn test_chaincertmc_from_pem() {
+fn test_chaincertmc_from_pem()  {
     let certs = include_bytes!("../../test/chaincert/coldbeertoken-chain.pem");
     let certs = ChainCertMC::from_pem(certs).unwrap();
     let mut chain_cert_builder = ChainCert::new();
     let mut builder = X509::builder().unwrap();
-    
+
     let chain_cert=chain_cert_builder
         .critical()
         .protocol_version(1)
@@ -644,13 +644,32 @@ fn test_chaincertmc_from_pem() {
     store_bldr.add_cert(ca1).unwrap();
     store_bldr.add_cert(ca2).unwrap();
     store_bldr.add_cert(ca3).unwrap();
-    
+
     let store = store_bldr.build();
-    
+
     let ctx = ChainCertContext::new(&chain_cert_builder, Some(&store));
 
-//    assert!(certs.verify(&ctx).unwrap());
+    let cc = certs.issuance_chains().unwrap().data();
+    for chain in cc {
+        match chain.back().unwrap().extensions(){
+            Some(ext_stack)=>{
+                let mut i=0;
+                for ext in ext_stack{
+                    println!("Extension i: {}", i);
+                    let ccext = ChainCert::from_x509extension(ext);
+                    i = i+1;
+                    println!("Extension data: {:?}", ccext);
+                }
+            },
+            None => println!("No chaincert extension present"),
+        }
+    }
     
-        //X509::stack_from_pem(certs).unwrap();
-
+    assert!(certs.verify(&ctx).unwrap());
 }
+
+
+
+
+
+

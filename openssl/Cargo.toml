@@ -30,6 +30,7 @@ serde = { version = "1", features = ["derive"] }
 openssl-sys = { version = "0.9.47", path = "../openssl-sys" }
 openssl-errors = { path = "../openssl-errors" }	
 error-chain = "0.12.1"
+hex="0.3"
 
 
 [dev-dependencies]

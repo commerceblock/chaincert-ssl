@@ -21,6 +21,7 @@
 //! }
 //! ```
 use std::fmt::Write;
+use std::fmt;
 
 use nid::Nid;
 use x509::{X509Extension, X509ExtensionRef, X509v3Context, X509, X509Ref, X509VerifyResult, X509StoreContext};
@@ -37,6 +38,10 @@ extern crate openssl_errors;
 use self::openssl_errors::put_error;
 
 use std::collections::{HashSet, VecDeque};
+
+use hash::MessageDigest;
+
+extern crate hex;
 
 /// An extension which indicates whether a certificate is a CA certificate.
 pub struct BasicConstraints {
@@ -519,6 +524,92 @@ impl SubjectAlternativeName {
     }
 }
 
+impl fmt::Debug for X509 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let subject_name_ref = self.subject_name();
+        write!(f,"Subject name: ")?;
+        for name in subject_name_ref.entries(){
+            write!(f,"{}, ",  name.data().as_utf8()?)?;
+        }
+        let issuer_name_ref = self.issuer_name();
+        write!(f,"Issuer name: ")?;
+        for name in issuer_name_ref.entries(){
+            write!(f,"{}, ", name.data().as_utf8()?)?;
+        }
+
+        write!(f,"SHA256 hash: {:?}, ", hex::encode(self.digest(MessageDigest::sha256())?))?;
+        write!(f,"Serial number: {:?}, ", self.serial_number().to_bn()?)?;
+        
+        let sig_algo=self.signature_algorithm();
+        write!(f,"Signature algorithm: {}, ", sig_algo.object())?;
+        
+        write!(f,"Not before: {}, ", self.not_before())?;
+        write!(f,"Not after: {}, ", self.not_after())?;
+        
+        match self.subject_alt_names(){
+            Some(name_stack)=>{
+                for name in name_stack{
+
+                    match name.dnsname(){
+                        Some(nm)=>{
+                            write!(f,"dnsname: {}, ", nm)?;
+                            ()
+                        },
+                        None => ()
+                    }
+                    
+                    match name.ipaddress(){
+                        Some(nm)=>{
+                            write!(f,"ipaddress: {}, ", std::str::from_utf8(nm).unwrap())?;
+                            ()
+                        },
+                        None => ()
+                    }
+                    
+                    match name.email(){
+                        Some(nm)=>{
+                            write!(f,"email: {}, ", nm)?;
+                            ()
+                        },
+                        None => ()
+                    }
+                    
+                    match name.uri(){
+                        Some(nm)=>{
+                            write!(f,"uri: {}, ", nm)?;
+                            ()
+                        },
+                        None => ()
+                    }
+                }
+            },
+            None => {write!(f,"No subjectAltNames, ")?;},
+        }
+
+        write!(f,"Chaincert extension data: ")?;
+        let mut b_found_cc  = false;
+        match self.extensions(){
+            Some(ext_stack)=>{
+                for ext in ext_stack{
+                    match ChainCert::from_x509extension(ext) {
+                        Ok(ccext) => {
+                            write!(f,"{:?}, ", ccext)?;
+                            b_found_cc=true;
+                        }
+                        Err(_e) => (),
+                    };
+                }
+            },
+            None => ()
+        };
+        if b_found_cc == false {
+            write!(f,"no chaincert extension.")?;
+        }
+        Ok(())
+    }
+}
+
+
 /// A context for verifying chaincert data
 /// Extends the X509v3Context
 pub struct ChainCertContext<'a> {
@@ -584,20 +675,25 @@ impl PartialEq for IssuanceChain {
     }
 }
 
+impl fmt::Debug for IssuanceChain {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "IssuanceChain: chain length = {}, {:?}", self.chain.len(), self.chain)
+    }
+}
+
 impl Eq for IssuanceChain {}
 
 
 //impl Eq for IssuanceChain {}
 
 impl IssuanceChain {
-    fn new() -> IssuanceChain {
-        IssuanceChain::from_vec(VecDeque::new())
-    }
-
     fn from_vec(v: VecDeque<X509>) -> IssuanceChain{
         IssuanceChain{chain: v}
     }
 
+    pub fn back(&self) -> Option<&X509> {
+        self.chain.back()
+    }
 
     fn issued(issuer: &X509, other: &X509) -> bool{
         issuer.issued(other) == X509VerifyResult::OK
@@ -611,33 +707,42 @@ impl IssuanceChain {
 //        let citer = self.chain.iter();
 //        citer.next();
 
+//        loop {
+            match stack.pop(){
+                None => (),
+                Some(c1) => {
+                    let mut tmp_chain = VecDeque::new();
+                    let mut tmp_chain_2 = Vec::new();
+                    tmp_chain.push_back(c1);
 
-        while stack.len() > 0 {
-            let c = stack.pop().unwrap();
-            match chain.pop_front(){
-                Some(f) => {
-                    if IssuanceChain::issued(&c,&f){
-                        chain.push_front(f);
-                        chain.push_front(c);
-                    }
-                    else {
-                        chain.push_front(f);
-                        if IssuanceChain::issued(&chain.back().unwrap(), &c){
-                            chain.push_back(c);
-                        } else {
-                            stack2.push_back(c);
+                    loop {
+                        match stack.pop(){
+                            Some(cert) => {
+                                if IssuanceChain::issued(&tmp_chain.back().unwrap(), &cert){
+                                    tmp_chain.push_back(cert);
+                                }
+                                else if IssuanceChain::issued(&cert, &tmp_chain.front().unwrap()){
+                                    tmp_chain.push_front(cert);
+                                } else {
+                                    tmp_chain_2.push(cert);
+                                }
+                            },
+                            None => {
+                                for c in tmp_chain_2 {
+                                    stack.push(c);
+                                }
+                                break;
+                            }
                         }
                     }
-                },
-                None => {
-                    chain.push_back(c);
+
+                    for c in tmp_chain {
+                        chain.push_back(c);
+                    }
                 }
             }
-        }
+  //      }
         
-        while stack2.len() > 0 {
-            stack.push(stack2.pop_back().unwrap());            
-        }
         match chain.len(){
             0 => None,
             _ => Some(IssuanceChain::from_vec(chain)),
@@ -738,6 +843,7 @@ impl IssuanceChain {
 //    }
 }
 
+#[derive(Debug)]
 pub struct IssuanceChainCollection {
     collect: HashSet<IssuanceChain>        
 }
@@ -793,9 +899,16 @@ impl IssuanceChainCollection {
     fn verify_min_ca(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
         Ok(true)
     }
+
+    pub fn data(&self) -> &HashSet<IssuanceChain> {
+        &self.collect
+    }
 }
 
+
+
 //Mutisignature certificate
+#[derive(Debug)]
 pub struct ChainCertMC {
     issuance_chains: Option<IssuanceChainCollection>,
 }
@@ -822,19 +935,23 @@ impl ChainCertMC {
                 return Err(ErrorStack::get());
             },
         };
-        for chain in &chains.collect{
-            assert!(chain.verify(ctx)?);
-        }
-
+        
         assert!(chains.verify(ctx)?);
                 
         //Validate every ROOT CA
         Ok(true)
     }
+
+    pub fn issuance_chains(&self) -> Option<&IssuanceChainCollection>{
+        match self.issuance_chains{
+            Some(ref ic) => Some(ic),
+            None => None
+        }
+    }
 }
 
 impl ChainCert {
-    pub const OID: &'static str = "1.34.90.2.39.21.1.4.5.44.23.22";
+    pub const OID: &'static str = "1.34.90.2.39.21.1.4.5.44.23.23";
     pub const SN: &'static str = "ChainCert";
     pub const LN: &'static str = "ChainCert blockchain certificate extension by www.commerceblock.com";
 
@@ -883,9 +1000,7 @@ impl ChainCert {
                         cc_read.push(cc);
                     },
                     //Keep all errors related to ChainCert extension.
-                    Err(e) => {
-                        ErrorStack::put(&e);
-                    }
+                    Err(e) => (),
                 }
             }
         }
