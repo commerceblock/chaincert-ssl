@@ -632,6 +632,49 @@ impl<'a> ChainCertContext<'a> {
     pub fn ca_store(&self) -> Option<&X509Store> {
         self.ca_store
     }
+
+    pub fn trusted_root(&self, cert: &X509) -> Result<(),ErrorStack>{
+        match self.ca_store {
+            None => {
+                put_error!(Extension::TRUSTED_ROOT, Extension::VERIFY_ERROR, ": trusted store is not defined for ChainCertContext");
+                return Err(ErrorStack::get());
+            }
+            Some(s) => {
+                if ChainCertContext::self_signed(cert) == false {
+                    put_error!(Extension::TRUSTED_ROOT, Extension::VERIFY_ERROR, ": certificate is not self-signed");
+                    return Err(ErrorStack::get());
+                }
+
+
+                let chain = Stack::new().unwrap();
+                match self.ca_store{
+                    Some(ref store) => {
+                        let mut context = X509StoreContext::new().unwrap();
+                        match context
+                            .init(store, &cert, &chain, |c| c.verify_cert()){
+                                Ok(r) => {
+                                    if r == false {
+                                        put_error!(Extension::TRUSTED_ROOT, Extension::VERIFY_ERROR, ": certificate chain does not have trusted root");
+                                        return Err(ErrorStack::get());
+                                    }
+                                }
+                                Err(e) => {return Err(e);}
+                            }
+                    },
+                    None => {
+                        put_error!(Extension::TRUSTED_ROOT, Extension::STATE_ERROR, ": trusted certificate store is not defined");
+                        return Err(ErrorStack::get());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn self_signed(cert: &X509) -> bool {
+        IssuanceChain::issued(cert, cert)
+    }
+    
 }
 
 /// An extension that allows a cryptoasset identity to be bound to the
@@ -695,7 +738,11 @@ impl IssuanceChain {
         self.chain.back()
     }
 
-    fn issued(issuer: &X509, other: &X509) -> bool{
+    pub fn front(&self) -> Option<&X509> {
+        self.chain.front()
+    }
+
+    pub fn issued(issuer: &X509, other: &X509) -> bool{
         issuer.issued(other) == X509VerifyResult::OK
     }
 
@@ -799,16 +846,7 @@ impl IssuanceChain {
                     return Err(ErrorStack::get());
             },
         }?;
-        match cc.verify(ctx){
-            Ok(r) => {
-                if r == false {
-                    put_error!(Extension::VERIFY_TAIL, Extension::STATE_ERROR,
-                               ": ChainCert::verify result should be Ok(true) or Err, but never Ok(false)");
-                    return Err(ErrorStack::get());
-                }
-            },
-            Err(e) => return Err(e),
-        }
+        cc.verify(ctx)?;
         Ok(true)
     }
 
@@ -890,13 +928,38 @@ impl IssuanceChainCollection {
 
     
     fn verify_issuance_chains(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
-        for ic in &self.collect {
+        let nchains=self.collect.len();
+        let mut ca_set = HashSet::new();
+        for ic in &self.collect{
             assert!(ic.verify(ctx)? == true);
+            match(ic.front()){
+                Some(ca_cert) => {
+                    ctx.trusted_root(ca_cert)?;
+                    ca_set.insert(ca_cert);
+                },
+                None => {
+                    put_error!(Extension::VERIFY_ISSUANCE_CHAINS, Extension::STATE_ERROR, ": Issuance chain empty.");
+                    return Err(ErrorStack::get());
+                }
+            }
+        }
+        match ctx.chain_cert.min_ca {
+            Some(min_ca) => {
+                if (ca_set.len() as u32) < min_ca {
+                    put_error!(Extension::VERIFY_ISSUANCE_CHAINS, Extension::VALUE_MISMATCH, ": number of unique root CA certs {} is less than min_ca {}", ca_set.len(), min_ca);
+                    return Err(ErrorStack::get());
+                }
+            },
+            None => ()
         }
         Ok(true)
     }
     
     fn verify_min_ca(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
+        for ic in &self.collect {
+            
+        }
+
         Ok(true)
     }
 
@@ -1372,7 +1435,7 @@ impl ChainCert {
         }
     }
     
-    pub fn verify(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
+    pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
         self.match_str_par(&String::from("tokenFullName"),
                            &self.token_full_name,
                            &ctx.chain_cert.token_full_name)?;
@@ -1424,7 +1487,7 @@ impl ChainCert {
             return  Err(ErrorStack::get());
         }
         
-        Ok(true)
+        Ok(())
     }
 }
 
@@ -1467,8 +1530,10 @@ openssl_errors::openssl_errors! {
             FROM_X509EXTENSION("function from_x509extension");
             VERIFY("function verify");
             VERIFY_TAIL("function verify");
-            VERIFY_TRUST_CHAIN("function verify");
-            VERIFY_ISSUANCE("function verify");
+            VERIFY_TRUST_CHAIN("function verify_trust_chainy");
+            TRUSTED_ROOT("function trusted_root");
+            VERIFY_ISSUANCE("function verify_issuance");
+            VERIFY_ISSUANCE_CHAINS("function verify_issuance_chains");
             PARSE_U32("function parse_u32");
         }
         reasons {

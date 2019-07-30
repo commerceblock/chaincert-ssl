@@ -441,7 +441,7 @@ fn x509_builder() {
         .wallet_hash("ecfea459");
 
     //The context contains a wallet hash present in the certificate wallet hash array
-    assert_eq!(cc_wallethash.verify(&ChainCertContext::new(&cc_wallethash_2, None)).unwrap(), true);
+    cc_wallethash.verify(&ChainCertContext::new(&cc_wallethash_2, None)).unwrap();
     
     match cc_wallethash_2.verify(&ChainCertContext::new(&cc_wallethash, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
@@ -466,7 +466,7 @@ fn x509_builder() {
         .wallet_server("1.2.3.4");
 
     //The context contains a wallet hash present in the certificate wallet hash array
-    assert_eq!(cc_walletserver.verify(&ChainCertContext::new(&cc_walletserver_2, None)).unwrap(), true);
+    cc_walletserver.verify(&ChainCertContext::new(&cc_walletserver_2, None)).unwrap();
     
     match cc_walletserver_2.verify(&ChainCertContext::new(&cc_walletserver, None)){
         Ok(_res)=>panic!("expected this test to fail!"),
@@ -610,26 +610,40 @@ fn test_verify_fails() {
 
 #[test]
 fn test_chaincertmc_from_pem()  {
-    let certs = include_bytes!("../../test/chaincert/coldbeertoken-chain.pem");
+    let certs = include_bytes!("../../test/chaincert/candybartoken-chain.pem");
     let certs = ChainCertMC::from_pem(certs).unwrap();
     let mut chain_cert_builder = ChainCert::new();
     let mut builder = X509::builder().unwrap();
 
+    let protocol_version=1;
+    let policy_version=1;
+    let min_ca=2;
+    let cop_cmc=3;
+    let cop_change=3;
+    let token_full_name="Candy Bar Token";
+    let token_short_name="CBT";
+    let genesis_block_hash="a6b3c4aaaabbbcc654";
+    let contract_hash="444eecd66a23";
+    let slot_id= "12234abc";
+    let blocksign_script_sig="223dccba773384eebc";
+    let wallet_hash="33aabbc";
+    let wallet_server="123.4.56.3";
+            
     let chain_cert=chain_cert_builder
         .critical()
-        .protocol_version(1)
-        .policy_version(2)
-        .min_ca(2)
-        .cop_cmc(3)
-        .cop_change(3)
-        .token_full_name("Cold Beer Token")
-        .token_short_name("CBT")
-        .genesis_block_hash("a6b3c4aaaabbbcc654")
-        .contract_hash("444eecd66a23")
-        .slot_id("12234abc")
-        .blocksign_script_sig("223dccba773384eebc")
-        .wallet_hash("33aabbc")
-        .wallet_server("123.4.56.3")
+        .protocol_version(protocol_version)
+        .policy_version(policy_version)
+        .min_ca(min_ca)
+        .cop_cmc(cop_cmc)
+        .cop_change(cop_change)
+        .token_full_name(token_full_name)
+        .token_short_name(token_short_name)
+        .genesis_block_hash(genesis_block_hash)
+        .contract_hash(contract_hash)
+        .slot_id(slot_id)
+        .blocksign_script_sig(blocksign_script_sig)
+        .wallet_hash(wallet_hash)
+        .wallet_server(wallet_server)
         .build(&builder.x509v3_context(None, None)).unwrap();
 
     let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
@@ -648,24 +662,134 @@ fn test_chaincertmc_from_pem()  {
     let store = store_bldr.build();
 
     let ctx = ChainCertContext::new(&chain_cert_builder, Some(&store));
+    assert!(certs.verify(&ctx).unwrap());
 
-    let cc = certs.issuance_chains().unwrap().data();
-    for chain in cc {
-        match chain.back().unwrap().extensions(){
-            Some(ext_stack)=>{
-                let mut i=0;
-                for ext in ext_stack{
-                    println!("Extension i: {}", i);
-                    let ccext = ChainCert::from_x509extension(ext);
-                    i = i+1;
-                    println!("Extension data: {:?}", ccext);
-                }
-            },
-            None => println!("No chaincert extension present"),
-        }
+    let mut chain_cert_builder_tmp = chain_cert_builder.clone();
+    //Test for insufficient number of root CAs
+    let min_ca=4;
+    chain_cert_builder_tmp.min_ca(min_ca);
+
+    let ctx = ChainCertContext::new(&chain_cert_builder_tmp, Some(&store));
+    match certs.verify(&ctx){
+        Ok(_) => {
+            assert!(false);
+        },
+        Err(e) => {
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify_issuance_chains");
+            assert_eq!(err.reason().unwrap(),"value mismatch");
+            assert_eq!(err.data().unwrap(),
+                       format!(": number of unique root CA certs {} is less than min_ca {}",
+                               3,
+                               min_ca));
+        },
+    }
+
+    let mut chain_cert_builder_tmp = chain_cert_builder.clone();
+    //Test for incorrect genesis block hash
+    let gb_hash="abcd3456";
+    chain_cert_builder_tmp.genesis_block_hash(gb_hash);
+
+    let ctx = ChainCertContext::new(&chain_cert_builder_tmp, Some(&store));
+    match certs.verify(&ctx){
+        Ok(_) => {
+            assert!(false);
+        },
+        Err(e) => {
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value mismatch");
+            assert_eq!(err.data().unwrap(),
+                       format!(": genesisBlockHash, expected {}, got {}",
+                               gb_hash,
+                               genesis_block_hash));
+
+
+        },
+    }
+
+    //Test for incorrect long name
+    let mut chain_cert_builder_tmp = chain_cert_builder.clone();
+    let token_full_name_bad="Cool Beans Token";
+    chain_cert_builder_tmp.token_full_name(token_full_name_bad);
+
+    let ctx = ChainCertContext::new(&chain_cert_builder_tmp, Some(&store));
+    match certs.verify(&ctx){
+        Ok(_) => {
+            assert!(false);
+        },
+        Err(e) => {
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value mismatch");
+            assert_eq!(err.data().unwrap(),
+                       format!(": tokenFullName, expected {}, got {}",
+                               token_full_name_bad,
+                               token_full_name));
+        },
+    }
+
+
+    //Bad certificate chains
+    let certs_bad_1 = include_bytes!("../../test/chaincert/candybartoken-chain-bad1.pem");
+    let certs_bad_1 = ChainCertMC::from_pem(certs_bad_1).unwrap();   
+
+    let gbhash_bad_1="a6b3c4aaaabbbcc655";
+    
+    let ctx = ChainCertContext::new(&chain_cert_builder, Some(&store));
+    match certs_bad_1.verify(&ctx){
+        Ok(_) => {
+            assert!(false);
+        },
+        Err(e) => {
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function verify");
+            assert_eq!(err.reason().unwrap(),"value mismatch");
+            assert_eq!(err.data().unwrap(),
+                       format!(": genesisBlockHash, expected {}, got {}",
+                               genesis_block_hash,
+                               gbhash_bad_1));
+        },
+    }
+
+
+    //One CA not in the store
+    let mut store_bldr_ca3_missing = X509StoreBuilder::new().unwrap();
+
+    let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
+    let ca1 = X509::from_pem(ca1).unwrap();
+    let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
+    let ca2 = X509::from_pem(ca2).unwrap();
+    store_bldr_ca3_missing.add_cert(ca1).unwrap();
+    store_bldr_ca3_missing.add_cert(ca2).unwrap();
+
+    let store_ca3_missing = store_bldr_ca3_missing.build();
+
+    let ctx_ca3_missing = ChainCertContext::new(&chain_cert_builder, Some(&store_ca3_missing));
+    match certs.verify(&ctx_ca3_missing){
+        Ok(_) => {
+            assert!(false);
+        },
+        Err(e) => {
+            assert_eq!(e.len(), 1);
+            let err = &e.errors()[0];
+            assert_eq!(err.library().unwrap(),"extension library");
+            assert_eq!(err.function().unwrap(),"function trusted_root");
+            assert_eq!(err.reason().unwrap(),"verify error");
+            assert_eq!(err.data().unwrap(),
+                       format!(": certificate chain does not have trusted root"));
+        },
     }
     
-    assert!(certs.verify(&ctx).unwrap());
+    
 }
 
 
