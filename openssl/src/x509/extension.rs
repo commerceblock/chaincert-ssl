@@ -1,4 +1,4 @@
-//! AddString extensions to an `X509` certificate or certificate request.
+//! Add extensions to an `X509` certificate or certificate request.
 //!
 //! The extensions defined for X.509 v3 certificates provide methods for
 //! associating additional attributes with users or public keys and for
@@ -1017,7 +1017,7 @@ impl ChainCert {
     pub const OID: &'static str = "1.34.90.2.39.21.1.4.5.44.23.23";
     pub const SN: &'static str = "ChainCert";
     pub const LN: &'static str = "ChainCert blockchain certificate extension by www.commerceblock.com";
-
+    
     /// Construct a new `ChainCert` extension.
     pub fn new() -> ChainCert {
         ChainCert {
@@ -1052,6 +1052,10 @@ impl ChainCert {
                 }
             }
         }
+    }
+
+    pub fn is_revoked(&self) -> Result<(),ErrorStack>{
+        Ok(())
     }
 
     pub fn from_x509(cert: &X509Ref) -> Result<ChainCert, ErrorStack> {
@@ -1436,6 +1440,7 @@ impl ChainCert {
     }
     
     pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
+        self.is_revoked()?;
         self.match_str_par(&String::from("tokenFullName"),
                            &self.token_full_name,
                            &ctx.chain_cert.token_full_name)?;
