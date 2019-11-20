@@ -156,7 +156,7 @@ fn real_main() -> Result<(), ErrorStack> {
 
 fn main() {
     match real_main() {
-        Ok(()) => println!("Finished."),
+        Ok(()) => println!("Finished mk_certs."),
         Err(e) => println!("Error: {}", e),
     };
 }
