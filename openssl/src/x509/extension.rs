@@ -685,8 +685,8 @@ pub struct ChainCert {
     protocol_version: Option<u32>,
     policy_version: Option<u32>,
     min_ca: Option<u32>,
-    cop_cmc: Option<u32>,
-    cop_change: Option<u32>,
+    pub cop_cmc: Option<u32>,
+    pub cop_change: Option<u32>,
     token_full_name: Option<String>,
     token_short_name: Option<String>,
     genesis_block_hash: Option<String>,
@@ -850,6 +850,19 @@ impl IssuanceChain {
         Ok(true)
     }
 
+    pub fn get_chaincert_extension(&self) -> Result<ChainCert, ErrorStack> {
+        for cert in &self.chain{
+            match ChainCert::from_x509(&cert){
+                Ok(cc) => {
+                    return Ok(cc);
+                },
+                Err(e) => (),
+            };
+        }
+        put_error!(Extension::GET_CHAINCERT_EXTENSION, Extension::FORMAT_ERROR, ": no chaincert extensions in the issuance chain");
+        Err(ErrorStack::get())
+    }
+    
 //    fn verify_trust_chain(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
 //        let cert = match self.chain.back(){
 //            Some(c) => c,
@@ -891,6 +904,20 @@ impl IssuanceChainCollection {
         IssuanceChainCollection{
             collect: HashSet::new()
         }
+    }
+
+    pub fn get_chaincert_extension(&self) -> Result<ChainCert, ErrorStack> {
+        for chain in &self.collect {
+            match chain.get_chaincert_extension(){
+                Ok(cc) => {
+                    return Ok(cc);
+                    ()
+                },
+                Err(e) => ()
+            }
+        }
+        put_error!(Extension::GET_CHAINCERT_EXTENSION, Extension::FORMAT_ERROR, ": no chaincert extensions in the issuance chain");
+        Err(ErrorStack::get())
     }
 
     pub fn insert_issuance_chain(&mut self, c: IssuanceChain) {
@@ -1011,6 +1038,20 @@ impl ChainCertMC {
             None => None
         }
     }
+
+    pub fn get_chaincert_extension(&self) -> Option<ChainCert>{
+        match self.issuance_chains{
+            Some(ref icc) => {
+                //Get the first cert with a chaincert extension
+                match icc.get_chaincert_extension() {
+                    Ok(cc) => return Some(cc),
+                    Err(_) => ()
+                };
+            },
+            None => ()
+        }
+        None
+    }
 }
 
 impl ChainCert {
@@ -1066,9 +1107,8 @@ impl ChainCert {
                     Ok(cc)=>{
                         cc_read.push(cc);
                     },
-                    //Keep all errors related to ChainCert extension.
-                    Err(e) => (),
-                }
+                    Err(e) => ()
+                };
             }
         }
 
@@ -1494,6 +1534,7 @@ impl ChainCert {
         
         Ok(())
     }
+
 }
 
 fn append(value: &mut String, first: &mut bool, should: bool, element: &str) {
@@ -1533,6 +1574,7 @@ openssl_errors::openssl_errors! {
             BUILD("function build");
             FROM_X509("function from_x509");
             FROM_X509EXTENSION("function from_x509extension");
+            GET_CHAINCERT_EXTENSION("function get_chaincert_extension");
             VERIFY("function verify");
             VERIFY_TAIL("function verify");
             VERIFY_TRUST_CHAIN("function verify_trust_chainy");

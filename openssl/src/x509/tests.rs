@@ -612,10 +612,13 @@ fn test_verify_fails() {
 fn test_chaincertmc_from_pem()  {
     let certs = include_bytes!("../../test/chaincert/candybartoken-chain.pem");
     let certs = ChainCertMC::from_pem(certs).unwrap();
+
+    let cc_from_certs = certs.get_chaincert_extension().unwrap();
+
     let mut chain_cert_builder = ChainCert::new();
     let mut builder = X509::builder().unwrap();
 
-    let protocol_version=1;
+    let protocol_version=12310;
     let policy_version=1;
     let min_ca=2;
     let cop_cmc=3;
@@ -630,7 +633,6 @@ fn test_chaincertmc_from_pem()  {
     let wallet_server="123.4.56.3";
             
     let chain_cert=chain_cert_builder
-        .critical()
         .protocol_version(protocol_version)
         .policy_version(policy_version)
         .min_ca(min_ca)
@@ -646,6 +648,8 @@ fn test_chaincertmc_from_pem()  {
         .wallet_server(wallet_server)
         .build(&builder.x509v3_context(None, None)).unwrap();
 
+    assert_eq!(cc_from_certs, chain_cert_builder);
+    
     let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
     let ca1 = X509::from_pem(ca1).unwrap();
     let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
