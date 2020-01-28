@@ -377,17 +377,18 @@ foreign_type_and_impl_send_sync! {
 
 impl PartialEq for X509 {
     fn eq(&self, other: &Self) -> bool {
-        true
-    }
-}
-
-impl std::hash::Hash for X509 {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.digest(MessageDigest::sha1()).unwrap().hash(state);
+        self.digest(MessageDigest::sha256()).unwrap().as_ref() ==
+            other.digest(MessageDigest::sha256()).unwrap().as_ref()
     }
 }
 
 impl Eq for X509 {}
+
+impl std::hash::Hash for X509 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.digest(MessageDigest::sha256()).unwrap().hash(state);
+    }
+}
 
 impl X509Ref {
     /// Returns this certificate's subject name.

@@ -25,7 +25,7 @@ use std::fmt;
 
 use nid::Nid;
 use x509::{X509Extension, X509ExtensionRef, X509v3Context, X509, X509Ref, X509VerifyResult, X509StoreContext};
-use x509::store::{X509StoreBuilder, X509Store};
+use x509::store::{X509Store};
 
 use stack::Stack;
 
@@ -639,7 +639,7 @@ impl<'a> ChainCertContext<'a> {
                 put_error!(Extension::TRUSTED_ROOT, Extension::VERIFY_ERROR, ": trusted store is not defined for ChainCertContext");
                 return Err(ErrorStack::get());
             }
-            Some(s) => {
+            Some(_) => {
                 if ChainCertContext::self_signed(cert) == false {
                     put_error!(Extension::TRUSTED_ROOT, Extension::VERIFY_ERROR, ": certificate is not self-signed");
                     return Err(ErrorStack::get());
@@ -749,46 +749,40 @@ impl IssuanceChain {
     //Extract an issuance chain from a stack of certificates
     pub fn next_from_stack(stack: &mut Vec<X509>) -> Option<IssuanceChain> {
         let mut chain: VecDeque<X509> = VecDeque::new();
-        let mut stack2: VecDeque<X509> = VecDeque::new();
 
-//        let citer = self.chain.iter();
-//        citer.next();
-
-//        loop {
-            match stack.pop(){
-                None => (),
-                Some(c1) => {
-                    let mut tmp_chain = VecDeque::new();
-                    let mut tmp_chain_2 = Vec::new();
-                    tmp_chain.push_back(c1);
-
-                    loop {
-                        match stack.pop(){
-                            Some(cert) => {
-                                if IssuanceChain::issued(&tmp_chain.back().unwrap(), &cert){
-                                    tmp_chain.push_back(cert);
-                                }
-                                else if IssuanceChain::issued(&cert, &tmp_chain.front().unwrap()){
-                                    tmp_chain.push_front(cert);
-                                } else {
-                                    tmp_chain_2.push(cert);
-                                }
-                            },
-                            None => {
-                                for c in tmp_chain_2 {
-                                    stack.push(c);
-                                }
-                                break;
+        match stack.pop(){
+            None => (),
+            Some(c1) => {
+                let mut tmp_chain = VecDeque::new();
+                let mut tmp_chain_2 = Vec::new();
+                tmp_chain.push_back(c1);
+                
+                loop {
+                    match stack.pop(){
+                        Some(cert) => {
+                            if IssuanceChain::issued(&tmp_chain.back().unwrap(), &cert){
+                                tmp_chain.push_back(cert);
                             }
+                            else if IssuanceChain::issued(&cert, &tmp_chain.front().unwrap()){
+                                tmp_chain.push_front(cert);
+                            } else {
+                                tmp_chain_2.push(cert);
+                            }
+                        },
+                        None => {
+                            for c in tmp_chain_2 {
+                                stack.push(c);
+                            }
+                            break;
                         }
                     }
+                }
 
-                    for c in tmp_chain {
-                        chain.push_back(c);
-                    }
+                for c in tmp_chain {
+                    chain.push_back(c);
                 }
             }
-  //      }
+        }
         
         match chain.len(){
             0 => None,
@@ -796,21 +790,14 @@ impl IssuanceChain {
         }
     }
 
-    pub fn verify(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
-        let mut result = self.verify_issuance()?;
-        result = result && self.verify_tail(ctx)?;
-  //      result = result && self.verify_trust_chain(ctx)?;
-        if result == false {
-            put_error!(Extension::VERIFY_TAIL, Extension::STATE_ERROR,
-                       ": ChainCert::verify result should be Ok(true) or Err, but never Ok(false)");
-            return Err(ErrorStack::get());
-        }
-        Ok(true)
+    pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
+        self.verify_issuance()?;
+        self.verify_tail(ctx)
     }
 
     //Verify that each cert is issued by the previous one in the chain, or is self-issued
     //in the case of the head of the chain.
-    fn verify_issuance(&self)->Result<bool, ErrorStack> {
+    fn verify_issuance(&self)->Result<(), ErrorStack> {
         let mut prev: Option<&X509> = None;        
         for cert in &self.chain {
             match prev {
@@ -831,11 +818,11 @@ impl IssuanceChain {
             }
             prev = Some(cert);
         }
-        Ok(true)
+        Ok(())
     }
     
     //Verify each end of chain certificate
-    fn verify_tail(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
+    fn verify_tail(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
         let cert = &self.chain.back();
         
         let cc = match cert.map(|c| ChainCert::from_x509(c)){
@@ -846,8 +833,7 @@ impl IssuanceChain {
                     return Err(ErrorStack::get());
             },
         }?;
-        cc.verify(ctx)?;
-        Ok(true)
+        cc.verify(ctx)
     }
 
     pub fn get_chaincert_extension(&self) -> Result<ChainCert, ErrorStack> {
@@ -856,7 +842,7 @@ impl IssuanceChain {
                 Ok(cc) => {
                     return Ok(cc);
                 },
-                Err(e) => (),
+                Err(_) => (),
             };
         }
         put_error!(Extension::GET_CHAINCERT_EXTENSION, Extension::FORMAT_ERROR, ": no chaincert extensions in the issuance chain");
@@ -910,10 +896,9 @@ impl IssuanceChainCollection {
         for chain in &self.collect {
             match chain.get_chaincert_extension(){
                 Ok(cc) => {
-                    return Ok(cc);
-                    ()
+                    return Ok(cc)
                 },
-                Err(e) => ()
+                Err(_) => ()
             }
         }
         put_error!(Extension::GET_CHAINCERT_EXTENSION, Extension::FORMAT_ERROR, ": no chaincert extensions in the issuance chain");
@@ -945,27 +930,17 @@ impl IssuanceChainCollection {
         Ok(coll)
     }
 
-    pub fn verify(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
-        //First verify that all the issuance chains are valid
-        assert!(self.verify_issuance_chains(ctx)? == true);
-        //Then verify that the count of unique CAs exceeds the required number
-        assert!(self.verify_min_ca(ctx)? == true);
-        Ok(true)
-    }
-
-    
-    fn verify_issuance_chains(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
-        let nchains=self.collect.len();
+    pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
         let mut ca_set = HashSet::new();
         for ic in &self.collect{
-            assert!(ic.verify(ctx)? == true);
+            ic.verify(ctx)?;
             match(ic.front()){
                 Some(ca_cert) => {
                     ctx.trusted_root(ca_cert)?;
                     ca_set.insert(ca_cert);
                 },
                 None => {
-                    put_error!(Extension::VERIFY_ISSUANCE_CHAINS, Extension::STATE_ERROR, ": Issuance chain empty.");
+                    put_error!(Extension::VERIFY, Extension::STATE_ERROR, ": Issuance chain empty.");
                     return Err(ErrorStack::get());
                 }
             }
@@ -973,23 +948,15 @@ impl IssuanceChainCollection {
         match ctx.chain_cert.min_ca {
             Some(min_ca) => {
                 if (ca_set.len() as u32) < min_ca {
-                    put_error!(Extension::VERIFY_ISSUANCE_CHAINS, Extension::VALUE_MISMATCH, ": number of unique root CA certs {} is less than min_ca {}", ca_set.len(), min_ca);
+                    put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH, ": number of unique root CA certs {} is less than min_ca {}", ca_set.len(), min_ca);
                     return Err(ErrorStack::get());
                 }
+                Ok(())
             },
-            None => ()
+            None => Ok(())
         }
-        Ok(true)
     }
     
-    fn verify_min_ca(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
-        for ic in &self.collect {
-            
-        }
-
-        Ok(true)
-    }
-
     pub fn data(&self) -> &HashSet<IssuanceChain> {
         &self.collect
     }
@@ -1016,7 +983,7 @@ impl ChainCertMC {
         Ok(ChainCertMC{issuance_chains: Some(icc)})
     }
 
-    pub fn verify(&self, ctx: &ChainCertContext)->Result<bool, ErrorStack> {
+    pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
         let chains = match &self.issuance_chains {
             Some(c) => c,
             None => {
@@ -1026,10 +993,7 @@ impl ChainCertMC {
             },
         };
         
-        assert!(chains.verify(ctx)?);
-                
-        //Validate every ROOT CA
-        Ok(true)
+        chains.verify(ctx)
     }
 
     pub fn issuance_chains(&self) -> Option<&IssuanceChainCollection>{
@@ -1107,7 +1071,7 @@ impl ChainCert {
                     Ok(cc)=>{
                         cc_read.push(cc);
                     },
-                    Err(e) => ()
+                    Err(_) => ()
                 };
             }
         }
@@ -1189,7 +1153,7 @@ impl ChainCert {
         for s in split {
             let substr = s.replace("ASN1:UTF8String:","");
             let split = substr.split(":");
-            let mut vec = split.collect::<Vec<&str>>();
+            let vec = split.collect::<Vec<&str>>();
             let val = match vec.len(){
                 0 => None,
                 1 => None,
@@ -1580,7 +1544,6 @@ openssl_errors::openssl_errors! {
             VERIFY_TRUST_CHAIN("function verify_trust_chainy");
             TRUSTED_ROOT("function trusted_root");
             VERIFY_ISSUANCE("function verify_issuance");
-            VERIFY_ISSUANCE_CHAINS("function verify_issuance_chains");
             PARSE_U32("function parse_u32");
         }
         reasons {

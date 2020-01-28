@@ -666,7 +666,7 @@ fn test_chaincertmc_from_pem()  {
     let store = store_bldr.build();
 
     let ctx = ChainCertContext::new(&chain_cert_builder, Some(&store));
-    assert!(certs.verify(&ctx).unwrap());
+    certs.verify(&ctx).unwrap();
 
     let mut chain_cert_builder_tmp = chain_cert_builder.clone();
     //Test for insufficient number of root CAs
@@ -682,7 +682,7 @@ fn test_chaincertmc_from_pem()  {
             assert_eq!(e.len(), 1);
             let err = &e.errors()[0];
             assert_eq!(err.library().unwrap(),"extension library");
-            assert_eq!(err.function().unwrap(),"function verify_issuance_chains");
+            assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value mismatch");
             assert_eq!(err.data().unwrap(),
                        format!(": number of unique root CA certs {} is less than min_ca {}",
