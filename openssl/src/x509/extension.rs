@@ -685,11 +685,10 @@ pub struct ChainCert {
     protocol_version: Option<u32>,
     policy_version: Option<u32>,
     min_ca: Option<u32>,
-    pub cop_cmc: Option<u32>,
     pub cop_change: Option<u32>,
     token_full_name: Option<String>,
     token_short_name: Option<String>,
-    genesis_block_hash: Option<String>,
+    token_id: Option<String>,
     contract_hash: Option<String>,
     slot_id: Option<String>,
     blocksign_script_sig: Option<String>,
@@ -792,7 +791,8 @@ impl IssuanceChain {
 
     pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
         self.verify_issuance()?;
-        self.verify_tail(ctx)
+        self.verify_tail(ctx)?;
+        Ok(())
     }
 
     //Verify that each cert is issued by the previous one in the chain, or is self-issued
@@ -833,7 +833,8 @@ impl IssuanceChain {
                     return Err(ErrorStack::get());
             },
         }?;
-        cc.verify(ctx)
+        cc.verify(ctx)?;
+        Ok(())
     }
 
     pub fn get_chaincert_extension(&self) -> Result<ChainCert, ErrorStack> {
@@ -1030,11 +1031,10 @@ impl ChainCert {
             protocol_version: None,
             policy_version: None,
             min_ca: None,
-            cop_cmc: None,
             cop_change: None,
             token_full_name: None,
             token_short_name: None,
-            genesis_block_hash: None,
+            token_id: None,
             contract_hash: None,
             slot_id: None,
             blocksign_script_sig: None,
@@ -1176,15 +1176,12 @@ impl ChainCert {
                 "minCa"=> {
                     cert.min_ca = ChainCert::parse_u32(val);
                 },
-                "copCmc"=> {
-                    cert.cop_cmc  = ChainCert::parse_u32(val);
-                },
                 "copChange"=> {
                     cert.cop_change = ChainCert::parse_u32(val);
                 },
                 "tokenFullName"=> cert.token_full_name = val,
                 "tokenShortName"=> cert.token_short_name = val,
-                "genesisBlockHash"=> cert.genesis_block_hash = val,
+                "tokenID"=> cert.token_id = val,
                 "contractHash"=> cert.contract_hash = val,
                 "slotID"=> cert.slot_id = val,
                 "blocksignScriptSig"=> cert.blocksign_script_sig = val,
@@ -1226,11 +1223,10 @@ impl ChainCert {
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.10","protocolVersion", "ASN.1 -  protocol version");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.11","policyVersion", "ASN.1 - policy version");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.12","minCa", "ASN.1 - min CA");
-        Nid::create("1.34.90.2.39.21.1.4.5.44.23.13","copCmc", "ASN.1 - COP CMC");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.14","copChange", "ASN.1 - COP change");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.15","tokenFullName", "ASN.1 - Token full name");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.16","tokenShortName", "ASN.1 - Token short name");
-        Nid::create("1.34.90.2.39.21.1.4.5.44.23.17","genesisBlockHash", "ASN.1 - Genesis block hash");
+        Nid::create("1.34.90.2.39.21.1.4.5.44.23.17","tokenID", "ASN.1 - Token ID");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.18","contractHash", "ASN.1 - Contract hash");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.19","slotID", "ASN.1 - Slot ID");
         Nid::create("1.34.90.2.39.21.1.4.5.44.23.20","blocksignScriptSig", "ASN.1 - Blocksign script sig");
@@ -1263,13 +1259,7 @@ impl ChainCert {
         self
     }
 
-    /// Sets the cooling off period for registering a new chaincert multisignature certificate
-    pub fn cop_cmc (&mut self, cop_cmc: u32) -> &mut ChainCert {
-        self.cop_cmc = Some(cop_cmc);
-        self
-    }
-
-    /// Sets the cooling off period for any changes
+    /// Sets the cooling off period for certificate registration/change
     pub fn cop_change (&mut self, cop_change: u32) -> &mut ChainCert {
         self.cop_change = Some(cop_change);
         self
@@ -1285,8 +1275,8 @@ impl ChainCert {
         self
     }
 
-    pub fn genesis_block_hash(&mut self, genesis_block_hash: &str) -> &mut ChainCert {
-        self.genesis_block_hash=Some(genesis_block_hash.to_string());
+    pub fn token_id(&mut self, token_id: &str) -> &mut ChainCert {
+        self.token_id=Some(token_id.to_string());
         self
     }
 
@@ -1330,9 +1320,6 @@ impl ChainCert {
         if let Some(min_ca) = self.min_ca{
             append_u32(&mut value, &mut first, min_ca, "minCa");
         }
-        if let Some(cop_cmc) = self.cop_cmc{
-            append_u32(&mut value, &mut first, cop_cmc, "copCmc");
-        }
         if let Some(cop_change) = self.cop_change{
             append_u32(&mut value, &mut first, cop_change, "copChange");
         }
@@ -1342,8 +1329,8 @@ impl ChainCert {
         if let Some(ref token_short_name) = self.token_short_name{
             append_str(&mut value, &mut first, &token_short_name, "tokenShortName");
         }
-        if let Some(ref genesis_block_hash) = self.genesis_block_hash{
-            append_str(&mut value, &mut first, &genesis_block_hash, "genesisBlockHash");
+        if let Some(ref token_id) = self.token_id{
+            append_str(&mut value, &mut first, &token_id, "tokenID");
         }
         if let Some(ref contract_hash) = self.contract_hash{
             append_str(&mut value, &mut first,&contract_hash , "contractHash");
@@ -1421,12 +1408,6 @@ impl ChainCert {
         3
     }
 
-    
-    //The length of time that the certificate has been published to a log
-    pub fn log_time(&self) -> u32 {
-        10
-    }
-
     fn max_or_none<T>(v1: Option<T>, v2: Option<T>) -> Option<T> where T: std::cmp::Ord {
         match v1{
             Some(v1) => {
@@ -1451,9 +1432,9 @@ impl ChainCert {
         self.match_str_par(&String::from("tokenShortName"),
                            &self.token_short_name,
                            &ctx.chain_cert.token_short_name)?;
-        self.match_str_par(&String::from("genesisBlockHash"),
-                           &self.genesis_block_hash,
-                           &ctx.chain_cert.genesis_block_hash)?;
+        self.match_str_par(&String::from("tokenID"),
+                           &self.token_id,
+                           &ctx.chain_cert.token_id)?;
         self.match_str_par(&String::from("contractHash"),
                            &self.contract_hash,
                            &ctx.chain_cert.contract_hash)?;
@@ -1469,26 +1450,6 @@ impl ChainCert {
         self.match_str_vec_par(&String::from("walletServer"),
                            &self.wallet_server,
                            &ctx.chain_cert.wallet_server)?;
-
-        let lt = self.log_time();
-        let cop_change = ChainCert::max_or_none(ctx.chain_cert.cop_change,
-                                self.cop_change);
-
-        if  cop_change.map(|c| lt < c).unwrap_or(false) {
-            put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH,
-                       "Certificate log time {} less than change cooling off period {}",
-                       lt, cop_change.unwrap());
-            return  Err(ErrorStack::get());
-        }
-
-        let cop_cmc = ChainCert::max_or_none(ctx.chain_cert.cop_change,
-                                             self.cop_change);
-        if  cop_cmc.map(|c| lt < c).unwrap_or(false) {
-            put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH,
-                       "Certificate log time {} less than CMC cooling off period {}",
-                       lt, cop_cmc.unwrap());
-            return  Err(ErrorStack::get());
-        }
 
         if self.min_ca.map( |m| self.n_ca() < m).unwrap_or(false){
             put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH,

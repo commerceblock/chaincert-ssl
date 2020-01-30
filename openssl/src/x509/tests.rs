@@ -243,11 +243,10 @@ fn x509_builder() {
         .protocol_version(1)
         .policy_version(2)
         .min_ca(3)
-        .cop_cmc(4)
         .cop_change(5)
         .token_full_name("Candy Bar Token")
         .token_short_name("CBT")
-        .genesis_block_hash("5d8353c6bfb2ff7923869ae7f89074ce9db26cff167db36843a78f840007130c")
+        .token_id("5d8353c6bfb2ff7923869ae7f89074ce9db26cff167db36843a78f840007130c")
         .contract_hash("6d8343c6cfb2aa7923869ae7f89074ce9db26cff167db36843a78f8400072e45")
         .slot_id("1ac322f0fa36baaab7dbd64043e66cac28edb4f383bf7f50e667bda6295474a1")
         .blocksign_script_sig("532103041f9d9edc4e494b07eec7d3f36cedd4b2cfbb6fe038b6efaa5f56b9636abd7b21037c06b0c66c98468d64bb43aff91a65c0a576113d8d978c3af191e38845ae5dab21031bd16518d76451e7cf13f64087e4ae4816d08ae1d579fa6c172dcfe4476bd7da210226c839b56b99af781bbb4ce14365744253ae75ffe6f9182dd7b0df95c439537a21023cd2fc00c9cb185b4c0da16a45a1039e16709a61fb22340645790b7d1391b66055ae")
@@ -301,7 +300,7 @@ fn x509_builder() {
 
     //Test for parameter mismatch
     let wrong_gen_hash = "0123456789abcdef";
-    ccr.genesis_block_hash(wrong_gen_hash);
+    ccr.token_id(wrong_gen_hash);
     match ccr.verify(&ctx){
         Ok(_res)=>panic!("expected this test to fail!"),
         //Check the expected error is returned
@@ -312,7 +311,7 @@ fn x509_builder() {
             assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value mismatch");
             assert_eq!(err.data().unwrap(), format!(": {}, expected {}, got {}",
-                                                    "genesisBlockHash",
+                                                    "tokenID",
                                                     gen_hash,
                                                     wrong_gen_hash));
         }
@@ -321,7 +320,7 @@ fn x509_builder() {
     let mut cc_with_gen = ChainCert::new();
     cc_with_gen
         .critical()
-        .genesis_block_hash(gen_hash);
+        .token_id(gen_hash);
 
     let mut cc_blank = ChainCert::new();
     cc_blank.critical();
@@ -337,7 +336,7 @@ fn x509_builder() {
             assert_eq!(err.library().unwrap(),"extension library");
             assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value missing");
-            assert_eq!(err.data().unwrap(), "genesisBlockHash in context but not in certificate");
+            assert_eq!(err.data().unwrap(), "tokenID in context but not in certificate");
         }
     }
 
@@ -613,21 +612,19 @@ fn test_chaincertmc_from_pem()  {
     let certs = include_bytes!("../../test/chaincert/candybartoken-chain.pem");
     let certs = ChainCertMC::from_pem(certs).unwrap();
 
-    let cc_from_certs = certs.get_chaincert_extension().unwrap();
+    let cc_from_certs = certs.get_chaincert_extension().expect("Could not get chaincert extension");
 
     let mut chain_cert_builder = ChainCert::new();
-    let mut builder = X509::builder().unwrap();
+    let mut builder = X509::builder().expect("Could not instantiate X509::builder");
 
     let protocol_version=12310;
     let policy_version=1;
     let min_ca=2;
-    let cop_cmc=3;
     let cop_change=3;
     let token_full_name="Candy Bar Token";
     let token_short_name="CBT";
-    let genesis_block_hash="a6b3c4aaaabbbcc654";
+    let token_id="a6b3c4aaaabbbcc654";
     let contract_hash="444eecd66a23";
-    let slot_id= "12234abc";
     let blocksign_script_sig="223dccba773384eebc";
     let wallet_hash="33aabbc";
     let wallet_server="123.4.56.3";
@@ -636,17 +633,15 @@ fn test_chaincertmc_from_pem()  {
         .protocol_version(protocol_version)
         .policy_version(policy_version)
         .min_ca(min_ca)
-        .cop_cmc(cop_cmc)
         .cop_change(cop_change)
         .token_full_name(token_full_name)
         .token_short_name(token_short_name)
-        .genesis_block_hash(genesis_block_hash)
+        .token_id(token_id)
         .contract_hash(contract_hash)
-        .slot_id(slot_id)
         .blocksign_script_sig(blocksign_script_sig)
         .wallet_hash(wallet_hash)
         .wallet_server(wallet_server)
-        .build(&builder.x509v3_context(None, None)).unwrap();
+        .build(&builder.x509v3_context(None, None)).expect("Failed to build chain cert extension");
 
     assert_eq!(cc_from_certs, chain_cert_builder);
     
@@ -654,14 +649,11 @@ fn test_chaincertmc_from_pem()  {
     let ca1 = X509::from_pem(ca1).unwrap();
     let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
     let ca2 = X509::from_pem(ca2).unwrap();
-    let ca3 = include_bytes!("../../test/chaincert/ca/root-ca-3.crt");
-    let ca3 = X509::from_pem(ca3).unwrap();
 
     let mut store_bldr = X509StoreBuilder::new().unwrap();
 
     store_bldr.add_cert(ca1).unwrap();
     store_bldr.add_cert(ca2).unwrap();
-    store_bldr.add_cert(ca3).unwrap();
 
     let store = store_bldr.build();
 
@@ -686,7 +678,7 @@ fn test_chaincertmc_from_pem()  {
             assert_eq!(err.reason().unwrap(),"value mismatch");
             assert_eq!(err.data().unwrap(),
                        format!(": number of unique root CA certs {} is less than min_ca {}",
-                               3,
+                               2,
                                min_ca));
         },
     }
@@ -694,7 +686,7 @@ fn test_chaincertmc_from_pem()  {
     let mut chain_cert_builder_tmp = chain_cert_builder.clone();
     //Test for incorrect genesis block hash
     let gb_hash="abcd3456";
-    chain_cert_builder_tmp.genesis_block_hash(gb_hash);
+    chain_cert_builder_tmp.token_id(gb_hash);
 
     let ctx = ChainCertContext::new(&chain_cert_builder_tmp, Some(&store));
     match certs.verify(&ctx){
@@ -708,9 +700,9 @@ fn test_chaincertmc_from_pem()  {
             assert_eq!(err.function().unwrap(),"function verify");
             assert_eq!(err.reason().unwrap(),"value mismatch");
             assert_eq!(err.data().unwrap(),
-                       format!(": genesisBlockHash, expected {}, got {}",
+                       format!(": tokenID, expected {}, got {}",
                                gb_hash,
-                               genesis_block_hash));
+                               token_id));
 
 
         },
@@ -740,45 +732,17 @@ fn test_chaincertmc_from_pem()  {
     }
 
 
-    //Bad certificate chains
-    let certs_bad_1 = include_bytes!("../../test/chaincert/candybartoken-chain-bad1.pem");
-    let certs_bad_1 = ChainCertMC::from_pem(certs_bad_1).unwrap();   
-
-    let gbhash_bad_1="a6b3c4aaaabbbcc655";
-    
-    let ctx = ChainCertContext::new(&chain_cert_builder, Some(&store));
-    match certs_bad_1.verify(&ctx){
-        Ok(_) => {
-            assert!(false);
-        },
-        Err(e) => {
-            assert_eq!(e.len(), 1);
-            let err = &e.errors()[0];
-            assert_eq!(err.library().unwrap(),"extension library");
-            assert_eq!(err.function().unwrap(),"function verify");
-            assert_eq!(err.reason().unwrap(),"value mismatch");
-            assert_eq!(err.data().unwrap(),
-                       format!(": genesisBlockHash, expected {}, got {}",
-                               genesis_block_hash,
-                               gbhash_bad_1));
-        },
-    }
-
-
     //One CA not in the store
-    let mut store_bldr_ca3_missing = X509StoreBuilder::new().unwrap();
+    let mut store_bldr_ca2_missing = X509StoreBuilder::new().unwrap();
 
     let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
     let ca1 = X509::from_pem(ca1).unwrap();
-    let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
-    let ca2 = X509::from_pem(ca2).unwrap();
-    store_bldr_ca3_missing.add_cert(ca1).unwrap();
-    store_bldr_ca3_missing.add_cert(ca2).unwrap();
+    store_bldr_ca2_missing.add_cert(ca1).unwrap();
 
-    let store_ca3_missing = store_bldr_ca3_missing.build();
+    let store_ca2_missing = store_bldr_ca2_missing.build();
 
-    let ctx_ca3_missing = ChainCertContext::new(&chain_cert_builder, Some(&store_ca3_missing));
-    match certs.verify(&ctx_ca3_missing){
+    let ctx_ca2_missing = ChainCertContext::new(&chain_cert_builder, Some(&store_ca2_missing));
+    match certs.verify(&ctx_ca2_missing){
         Ok(_) => {
             assert!(false);
         },
