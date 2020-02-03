@@ -611,9 +611,24 @@ fn test_verify_fails() {
 #[test]
 fn test_chaincertmc_from_pem()  {
     let certs = include_bytes!("../../test/chaincert/candybartoken-chain.pem");
-    let certs = ChainCertMC::from_pem(certs).unwrap();
+    
+    let certs = match ChainCertMC::from_pem(certs){
+        Ok(c) => Some(c),
+        Err(e) => {
+            println!("Failed to build ChainCertMC: {}", e.to_string());
+            assert!(false);
+            None
+        }
+    }.unwrap();
 
-    let cc_from_certs = certs.get_chaincert_extension().unwrap();
+    let cc_from_certs = match certs.get_chaincert_extension(){
+        Ok(c) => Some(c),
+        Err(e) => {
+            println!("Failed to obtain ChainCert extension from ChainCertMC: {}", e.to_string());
+            assert!(false);
+            None
+        }
+    }.unwrap();
 
     let mut chain_cert_builder = ChainCert::new();
     let mut builder = X509::builder().unwrap();
@@ -654,14 +669,11 @@ fn test_chaincertmc_from_pem()  {
     let ca1 = X509::from_pem(ca1).unwrap();
     let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
     let ca2 = X509::from_pem(ca2).unwrap();
-    let ca3 = include_bytes!("../../test/chaincert/ca/root-ca-3.crt");
-    let ca3 = X509::from_pem(ca3).unwrap();
 
     let mut store_bldr = X509StoreBuilder::new().unwrap();
 
     store_bldr.add_cert(ca1).unwrap();
     store_bldr.add_cert(ca2).unwrap();
-    store_bldr.add_cert(ca3).unwrap();
 
     let store = store_bldr.build();
 
@@ -763,36 +775,6 @@ fn test_chaincertmc_from_pem()  {
                                gbhash_bad_1));
         },
     }
-
-
-    //One CA not in the store
-    let mut store_bldr_ca3_missing = X509StoreBuilder::new().unwrap();
-
-    let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
-    let ca1 = X509::from_pem(ca1).unwrap();
-    let ca2 = include_bytes!("../../test/chaincert/ca/root-ca-2.crt");
-    let ca2 = X509::from_pem(ca2).unwrap();
-    store_bldr_ca3_missing.add_cert(ca1).unwrap();
-    store_bldr_ca3_missing.add_cert(ca2).unwrap();
-
-    let store_ca3_missing = store_bldr_ca3_missing.build();
-
-    let ctx_ca3_missing = ChainCertContext::new(&chain_cert_builder, Some(&store_ca3_missing));
-    match certs.verify(&ctx_ca3_missing){
-        Ok(_) => {
-            assert!(false);
-        },
-        Err(e) => {
-            assert_eq!(e.len(), 1);
-            let err = &e.errors()[0];
-            assert_eq!(err.library().unwrap(),"extension library");
-            assert_eq!(err.function().unwrap(),"function trusted_root");
-            assert_eq!(err.reason().unwrap(),"verify error");
-            assert_eq!(err.data().unwrap(),
-                       format!(": certificate chain does not have trusted root"));
-        },
-    }
-    
     
 }
 
