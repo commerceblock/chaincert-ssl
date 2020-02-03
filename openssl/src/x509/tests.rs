@@ -610,9 +610,24 @@ fn test_verify_fails() {
 #[test]
 fn test_chaincertmc_from_pem()  {
     let certs = include_bytes!("../../test/chaincert/candybartoken-chain.pem");
-    let certs = ChainCertMC::from_pem(certs).unwrap();
+    
+    let certs = match ChainCertMC::from_pem(certs){
+        Ok(c) => Some(c),
+        Err(e) => {
+            println!("Failed to build ChainCertMC: {}", e.to_string());
+            assert!(false);
+            None
+        }
+    }.unwrap();
 
-    let cc_from_certs = certs.get_chaincert_extension().expect("Could not get chaincert extension");
+    let cc_from_certs = match certs.get_chaincert_extension(){
+        Ok(c) => Some(c),
+        Err(e) => {
+            println!("Failed to obtain ChainCert extension from ChainCertMC: {}", e.to_string());
+            assert!(false);
+            None
+        }
+    }.unwrap();
 
     let mut chain_cert_builder = ChainCert::new();
     let mut builder = X509::builder().expect("Could not instantiate X509::builder");
@@ -732,18 +747,15 @@ fn test_chaincertmc_from_pem()  {
     }
 
 
-    //One CA not in the store
     let mut store_bldr_ca2_missing = X509StoreBuilder::new().unwrap();
-
+    
     let ca1 = include_bytes!("../../test/chaincert/ca/root-ca.crt");
     let ca1 = X509::from_pem(ca1).unwrap();
     store_bldr_ca2_missing.add_cert(ca1).unwrap();
-
     let store_ca2_missing = store_bldr_ca2_missing.build();
-
     let ctx_ca2_missing = ChainCertContext::new(&chain_cert_builder, Some(&store_ca2_missing));
     match certs.verify(&ctx_ca2_missing){
-        Ok(_) => {
+     Ok(_) => {
             assert!(false);
         },
         Err(e) => {
@@ -756,7 +768,6 @@ fn test_chaincertmc_from_pem()  {
                        format!(": certificate chain does not have trusted root"));
         },
     }
-    
     
 }
 

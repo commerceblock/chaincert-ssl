@@ -41,6 +41,8 @@ use std::collections::{HashSet, VecDeque};
 
 use hash::MessageDigest;
 
+use pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Public};
+
 extern crate hex;
 
 /// An extension which indicates whether a certificate is a CA certificate.
@@ -837,6 +839,12 @@ impl IssuanceChain {
         Ok(())
     }
 
+    //Get the public key of the end point certificate
+    pub fn get_tail_pubkey(&self)->Result<PKey<Public>, ErrorStack>  {
+            let cert = &self.chain.back().unwrap();
+            cert.public_key()
+    }
+    
     pub fn get_chaincert_extension(&self) -> Result<ChainCert, ErrorStack> {
         for cert in &self.chain{
             match ChainCert::from_x509(&cert){
@@ -879,7 +887,9 @@ impl IssuanceChain {
 //        }
 //        Ok(true)
 //    }
+    //}
 }
+    
 
 #[derive(Debug)]
 pub struct IssuanceChainCollection {
@@ -933,6 +943,7 @@ impl IssuanceChainCollection {
 
     pub fn verify(&self, ctx: &ChainCertContext)->Result<(), ErrorStack> {
         let mut ca_set = HashSet::new();
+        let mut end_pubkey : Option<PKey<Public>> = None;
         for ic in &self.collect{
             ic.verify(ctx)?;
             match(ic.front()){
@@ -945,6 +956,22 @@ impl IssuanceChainCollection {
                     return Err(ErrorStack::get());
                 }
             }
+            /*
+            let k2 = ic.get_tail_pubkey()?;
+            match &end_pubkey {
+                None => {
+                    end_pubkey = Some(k2);
+                    ()
+                },
+                Some(k1) => {
+                    if k1.id() != k2.id() {
+                        put_error!(Extension::VERIFY_ISSUANCE_CHAINS, Extension::VALUE_MISMATCH, ": non-matching end-certificate public keys");
+                        return Err(ErrorStack::get());
+                    }
+                    ()
+                }
+            };
+             */
         }
         match ctx.chain_cert.min_ca {
             Some(min_ca) => {
@@ -1004,19 +1031,19 @@ impl ChainCertMC {
         }
     }
 
-    pub fn get_chaincert_extension(&self) -> Option<ChainCert>{
+    pub fn get_chaincert_extension(&self) -> Result<ChainCert, ErrorStack>{
         match self.issuance_chains{
             Some(ref icc) => {
                 //Get the first cert with a chaincert extension
-                match icc.get_chaincert_extension() {
-                    Ok(cc) => return Some(cc),
-                    Err(_) => ()
-                };
+                icc.get_chaincert_extension()
             },
-            None => ()
+            None => {
+                put_error!(Extension::GET_CHAINCERT_EXTENSION, Extension::FORMAT_ERROR, ": no issuance chains");
+                Err(ErrorStack::get())
+            }
         }
-        None
     }
+
 }
 
 impl ChainCert {
