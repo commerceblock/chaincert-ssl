@@ -41,7 +41,7 @@ use std::collections::{HashSet, VecDeque};
 
 use hash::MessageDigest;
 
-use pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Public};
+use pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Public, Id};
 
 extern crate hex;
 
@@ -956,7 +956,6 @@ impl IssuanceChainCollection {
                     return Err(ErrorStack::get());
                 }
             }
-            /*
             let k2 = ic.get_tail_pubkey()?;
             match &end_pubkey {
                 None => {
@@ -964,15 +963,42 @@ impl IssuanceChainCollection {
                     ()
                 },
                 Some(k1) => {
-                    if k1.id() != k2.id() {
-                        put_error!(Extension::VERIFY_ISSUANCE_CHAINS, Extension::VALUE_MISMATCH, ": non-matching end-certificate public keys");
+                    let pkey_type = k1.id();
+                    if pkey_type != k2.id() {
+                        put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH, ": non-matching end-certificate public keys");
                         return Err(ErrorStack::get());
+                    }
+                    match pkey_type {
+                        Id::EC => {
+                            if to_der!(k1.ec()?) != to_der!(k2.ec()?){
+                                put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH, ": non-matching end-certificate ec public keys");
+                                return Err(ErrorStack::get());
+                            }
+                        },
+                        Id::DH => {
+                            if to_der!(k1.dh()?) != to_der!(k2.dh()?){
+                                put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH, ": non-matching end-certificate ec public keys");
+                                return Err(ErrorStack::get());
+                            }
+                        },
+                        Id::DSA => {
+                            if to_der!(k1.dsa()?) != to_der!(k2.dsa()?){
+                                put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH, ": non-matching end-certificate ec public keys");
+                                return Err(ErrorStack::get());
+                            }
+                        },
+                        Id::RSA => {
+                            if to_der!(k1.rsa()?) != to_der!(k2.rsa()?){
+                                put_error!(Extension::VERIFY, Extension::VALUE_MISMATCH, ": non-matching end-certificate ec public keys");
+                                return Err(ErrorStack::get());
+                            }
+                        }
                     }
                     ()
                 }
             };
-             */
         }
+        
         match ctx.chain_cert.min_ca {
             Some(min_ca) => {
                 if (ca_set.len() as u32) < min_ca {
